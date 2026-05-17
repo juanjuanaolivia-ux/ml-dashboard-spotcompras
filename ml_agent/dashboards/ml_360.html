@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ML 360° - Mayo 2026</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{--bg:#0d0d1a;--card:#151528;--border:#1e1e3a;--text:#e0e0e0;--muted:#7a7a9a;--blue:#3483FA;--yellow:#FFE600;--green:#00A650;--red:#F23D4F;--purple:#9b59b6;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;min-height:100vh;}
+a{color:var(--blue);text-decoration:none;}
+a:hover{text-decoration:underline;}
+header{background:linear-gradient(135deg,#0d0d2e,#151540);padding:16px 24px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);}
+.header-title{font-size:1.3rem;font-weight:700;color:var(--blue);letter-spacing:.5px;}
+.header-sub{font-size:.8rem;color:var(--muted);margin-top:2px;}
+.header-right{text-align:right;font-size:.8rem;color:var(--muted);}
+nav{background:var(--card);border-bottom:1px solid var(--border);padding:8px 24px;display:flex;gap:6px;flex-wrap:wrap;}
+.tab-btn{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:20px;padding:6px 16px;cursor:pointer;font-size:.85rem;transition:all .2s;}
+.tab-btn:hover{border-color:var(--blue);color:var(--blue);}
+.tab-btn.active{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600;}
+.tab-content{display:none;padding:24px;}
+.tab-content.active{display:block;}
+.section-title{font-size:1rem;font-weight:700;color:var(--blue);margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid var(--border);}
+.kpi-row{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:24px;}
+.kpi-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 20px;flex:1;min-width:160px;}
+.kpi-label{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;}
+.kpi-val{font-size:1.6rem;font-weight:700;color:var(--text);}
+.kpi-prev{font-size:.78rem;color:var(--muted);margin-top:4px;}
+.kpi-delta{font-size:.82rem;font-weight:600;margin-top:2px;}
+.good{color:var(--green);} .bad{color:var(--red);} .neutral{color:var(--muted);}
+.chart-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px;}
+.chart-title{font-size:.9rem;font-weight:600;color:var(--text);margin-bottom:14px;}
+.chart-grid{display:grid;gap:16px;}
+.chart-grid.cols2{grid-template-columns:1fr 1fr;}
+.chart-grid.cols3{grid-template-columns:1fr 1fr 1fr;}
+table{width:100%;border-collapse:collapse;font-size:.83rem;}
+thead th{background:#0d0d2e;color:var(--muted);text-transform:uppercase;font-size:.72rem;padding:10px 12px;text-align:left;cursor:pointer;user-select:none;border-bottom:1px solid var(--border);}
+thead th:hover{color:var(--blue);}
+tbody tr:hover{background:rgba(52,131,250,.06);}
+tbody td{padding:9px 12px;border-bottom:1px solid var(--border);}
+.table-card{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:20px;}
+.pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:.72rem;font-weight:600;}
+.pill-blue{background:rgba(52,131,250,.15);color:var(--blue);}
+.pill-yellow{background:rgba(255,230,0,.15);color:var(--yellow);}
+.pill-green{background:rgba(0,166,80,.15);color:var(--green);}
+.pill-purple{background:rgba(155,89,182,.15);color:var(--purple);}
+.health-bar{display:inline-block;height:8px;border-radius:4px;vertical-align:middle;}
+.info-box{background:rgba(52,131,250,.08);border:1px solid rgba(52,131,250,.25);border-radius:10px;padding:14px 18px;font-size:.85rem;color:var(--muted);margin-bottom:16px;}
+.info-box strong{color:var(--blue);}
+.warn-box{background:rgba(242,61,79,.08);border:1px solid rgba(242,61,79,.25);border-radius:10px;padding:14px 18px;font-size:.85rem;color:var(--muted);margin-bottom:16px;}
+.warn-box strong{color:var(--red);}
+.heatmap-table{border-collapse:collapse;font-size:.7rem;width:100%;}
+.heatmap-table td{width:3.5%;padding:3px;text-align:center;border:1px solid #0d0d1a;border-radius:3px;cursor:default;}
+.heatmap-table th{padding:4px 2px;font-size:.65rem;color:var(--muted);text-align:center;}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.chart-wrap{position:relative;width:100%;}
+.table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+@media(max-width:900px){
+  .chart-grid.cols2,.chart-grid.cols3,.two-col{grid-template-columns:1fr;}
+  nav{overflow-x:auto;flex-wrap:nowrap;padding:8px 12px;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+  nav::-webkit-scrollbar{display:none;}
+  .tab-btn{white-space:nowrap;}
+  .kpi-row{grid-template-columns:1fr 1fr;}
+  .tab-content{padding:14px;}
+  header{padding:12px 14px;flex-wrap:wrap;gap:6px;}
+  .header-title{font-size:1.1rem;}
+}
+@media(max-width:480px){
+  .kpi-card{min-width:calc(50% - 6px);padding:12px 14px;}
+  .kpi-val{font-size:1.3rem;}
+  .kpi-row{display:flex;flex-wrap:wrap;}
+  table{font-size:.75rem;}
+  thead th{padding:8px 8px;font-size:.66rem;}
+  tbody td{padding:7px 8px;}
+}
+</style>
+</head>
+<body>
+<header>
+<div><div class="header-title">ML 360°</div><div class="header-sub">Mayo 2026 vs Abril 2026</div></div>
+<div class="header-right">Actualizado: 2026-05-17 13:40</div>
+</header>
+<nav>
+<button class="tab-btn active" onclick="T('resumen',this)">Resumen</button>
+<button class="tab-btn" onclick="T('ventas',this)">Ventas</button>
+<button class="tab-btn" onclick="T('horarios',this)">Horarios</button>
+<button class="tab-btn" onclick="T('stock',this)">Stock</button>
+<button class="tab-btn" onclick="T('comisiones',this)">Comisiones</button>
+<button class="tab-btn" onclick="T('cancelaciones',this)">Cancelaciones</button>
+<button class="tab-btn" onclick="T('reputacion',this)">Reputación</button>
+<button class="tab-btn" onclick="T('ads',this)">Ads &amp; Costos</button>
+</nav>
+<div id="tab-resumen" class="tab-content active">
+<div class="section-title">KPIs Principales — Mayo 2026</div>
+<div class="kpi-row">
+<div class="kpi-card"><div class="kpi-label">GMV</div><div class="kpi-val">$324.7M</div><div class="kpi-prev">Anterior: $273.7M</div><div class="kpi-delta good">▲ 18.7%</div></div>
+<div class="kpi-card"><div class="kpi-label">Unidades</div><div class="kpi-val">4,788</div><div class="kpi-prev">Anterior: 3,997</div><div class="kpi-delta good">▲ 19.8%</div></div>
+<div class="kpi-card"><div class="kpi-label">Órdenes Pagadas</div><div class="kpi-val">4,611</div><div class="kpi-prev">Anterior: 3,736</div><div class="kpi-delta good">▲ 23.4%</div></div>
+<div class="kpi-card"><div class="kpi-label">Ticket Promedio</div><div class="kpi-val">$70K</div><div class="kpi-prev">Anterior: $73K</div><div class="kpi-delta bad">▼ 3.9%</div></div>
+<div class="kpi-card"><div class="kpi-label">Neto ML</div><div class="kpi-val">$262.2M</div><div class="kpi-prev">Anterior: $220.2M</div><div class="kpi-delta good">▲ 19.0%</div></div>
+<div class="kpi-card"><div class="kpi-label">Comisiones ML</div><div class="kpi-val">$62.5M</div><div class="kpi-prev">Anterior: $53.4M</div><div class="kpi-delta bad">▲ 17.1%</div></div>
+<div class="kpi-card"><div class="kpi-label">% Comisión</div><div class="kpi-val">19.3%</div><div class="kpi-prev">Anterior: 19.5%</div><div class="kpi-delta good">▼ 1.3%</div></div>
+<div class="kpi-card"><div class="kpi-label">Cancelaciones</div><div class="kpi-val">250 (5.1%)</div><div class="kpi-prev">Anterior: 233 (5.9%)</div><div class="kpi-delta good">▼ 12.4%</div></div>
+</div>
+<div class="two-col">
+<div class="chart-card">
+<div class="chart-title">Tipo de Publicación</div>
+<div style="display:flex;gap:20px;margin-bottom:16px;">
+<div style="flex:1;background:#0d0d2e;border-radius:10px;padding:14px;"><div style="font-size:.75rem;color:var(--muted);margin-bottom:4px;">CLÁSICA</div><div style="font-size:1.3rem;font-weight:700;color:var(--blue);">$189.0M</div><div style="font-size:.8rem;color:var(--muted);">3,311 unidades</div></div>
+<div style="flex:1;background:#0d0d2e;border-radius:10px;padding:14px;"><div style="font-size:.75rem;color:var(--muted);margin-bottom:4px;">PREMIUM</div><div style="font-size:1.3rem;font-weight:700;color:var(--yellow);">$78.2M</div><div style="font-size:.8rem;color:var(--muted);">828 unidades</div></div>
+</div>
+<div class="chart-wrap" style="height:200px;"><canvas id="c-listing-type"></canvas></div>
+</div>
+<div class="chart-card">
+<div class="chart-title">Logística</div>
+<div style="display:flex;gap:20px;margin-bottom:16px;">
+<div style="flex:1;background:#0d0d2e;border-radius:10px;padding:14px;"><div style="font-size:.75rem;color:var(--muted);margin-bottom:4px;">FULL</div><div style="font-size:1.3rem;font-weight:700;color:var(--green);">$219.3M</div><div style="font-size:.8rem;color:var(--muted);">3,756 unidades</div></div>
+<div style="flex:1;background:#0d0d2e;border-radius:10px;padding:14px;"><div style="font-size:.75rem;color:var(--muted);margin-bottom:4px;">FLEX</div><div style="font-size:1.3rem;font-weight:700;color:var(--purple);">$47.9M</div><div style="font-size:.8rem;color:var(--muted);">383 unidades</div></div>
+</div>
+<div class="chart-wrap" style="height:200px;"><canvas id="c-logistic"></canvas></div>
+</div>
+</div>
+</div>
+<div id="tab-ventas" class="tab-content">
+<div class="chart-card">
+<div class="chart-title">GMV Mensual 2026</div>
+<div class="chart-wrap" style="height:280px;"><canvas id="c-monthly-gmv"></canvas></div>
+</div>
+<div class="chart-card">
+<div class="chart-title">GMV Diario: Mayo 2026 vs Abril 2026</div>
+<div class="chart-wrap" style="height:300px;"><canvas id="c-daily-gmv"></canvas></div>
+</div>
+<div class="section-title">Top 15 Productos por GMV</div>
+<div class="table-card table-scroll">
+<table id="tbl-top15">
+<thead><tr><th onclick="srt('tbl-top15',0)">#</th><th onclick="srt('tbl-top15',1)">Producto</th><th onclick="srt('tbl-top15',2)">GMV</th><th onclick="srt('tbl-top15',3)">Unidades</th><th onclick="srt('tbl-top15',4)">Comisión</th><th onclick="srt('tbl-top15',5)">% Com.</th></tr></thead><tbody>
+<tr><td>1</td><td><a href="https://articulo.mercadolibre.com.ar/MLA-2861249332-batidora-planetaria-3-en-1-tivoli-5-litros-1200w-bate-mezcla-amasa-rojo-50-hz60-hz-_JM" target="_blank">Batidora Planetaria 3 En 1 Tivoli 5 Litros 1200w Bate M</a></td><td data-val="30315404">$30.3M</td><td data-val="218">218</td><td data-val="4375166">$4.4M</td><td data-val="14.43">14.4%</td></tr>
+<tr><td>2</td><td>Freidora De Aire Digital Tivoli 6,2 Litros 1800w Air Fr</td><td data-val="23042733">$23.0M</td><td data-val="327">327</td><td data-val="3310856">$3.3M</td><td data-val="14.37">14.4%</td></tr>
+<tr><td>3</td><td><a href="https://articulo.mercadolibre.com.ar/MLA-2077361436-batidora-de-pie-planetaria-digital-3-en-1-tivoli-52l-1200w-color-rojo-frecuencia-50-hz-60-hz-_JM" target="_blank">Batidora De Pie Planetaria Digital 3 En 1 Tivoli 5,2l 1</a></td><td data-val="12183642">$12.2M</td><td data-val="74">74</td><td data-val="1766628">$1.8M</td><td data-val="14.50">14.5%</td></tr>
+<tr><td>4</td><td><a href="https://articulo.mercadolibre.com.ar/MLA-3006240464-maquina-de-coser-tivoli-16-estilos-de-puntadas-2-velocidades-blanco-_JM" target="_blank">Máquina De Coser Tivoli 16 Estilos De Puntadas 2 Veloci</a></td><td data-val="11547421">$11.5M</td><td data-val="119">119</td><td data-val="1732113">$1.7M</td><td data-val="15.00">15.0%</td></tr>
+<tr><td>5</td><td><a href="https://articulo.mercadolibre.com.ar/MLA-2050307374-fabrica-de-mini-donas-tivoli-donuts-maker-750w-placas-antiadherentes-color-negro-_JM" target="_blank">Fabrica De Mini Donas Tivoli Donuts Maker 750w - Placas</a></td><td data-val="10442772">$10.4M</td><td data-val="328">328</td><td data-val="2486305">$2.5M</td><td data-val="23.81">23.8%</td></tr>
+<tr><td>6</td><td>Microondas Tivoli 5 Niveles De Cocción Temporizador 700</td><td data-val="10392623">$10.4M</td><td data-val="77">77</td><td data-val="1451440">$1.5M</td><td data-val="13.97">14.0%</td></tr>
+<tr><td>7</td><td><a href="https://articulo.mercadolibre.com.ar/MLA-2050381862-fabrica-de-mini-donas-tivoli-donuts-maker-750w-placas-antiadherentes-color-negro-_JM" target="_blank">Fabrica De Mini Donas Tivoli Donuts Maker 750w - Placas</a></td><td data-val="10187990">$10.2M</td><td data-val="255">255</td><td data-val="1471445">$1.5M</td><td data-val="14.44">14.4%</td></tr>
+<tr><td>8</td><td><a href="https://articulo.mercadolibre.com.ar/MLA-2077390262-batidora-de-pie-planetaria-digital-3-en-1-tivoli-52l-1200w-color-rojo-frecuencia-50-hz-60-hz-_JM" target="_blank">Batidora De Pie Planetaria Digital 3 En 1 Tivoli 5,2l 1</a></td><td data-val="8884626">$8.9M</td><td data-val="54">54</td><td data-val="2068953">$2.1M</td><td data-val="23.29">23.3%</td></tr>
+<tr><td>9</td><td><a href="https://articulo.mercadolibre.com.ar/MLA-2036196286-freidora-de-aire-tivoli-9-litros-1800w-panel-digital-tactil-horno-negro-_JM" target="_blank">Freidora De Aire Tivoli 9 Litros 1800w Panel Digital Tá</a></td><td data-val="8270191">$8.3M</td><td data-val="75">75</td><td data-val="1199178">$1.2M</td><td data-val="14.50">14.5%</td></tr>
+<tr><td>10</td><td><a href="https://articulo.mercadolibre.com.ar/MLA-2044345732-multirallador-electrico-tivoli-5-cuchillas-empujador-alimentos-color-blanco-_JM" target="_blank">Multirallador Eléctrico Tivoli 5 Cuchillas + Empujador </a></td><td data-val="8047731">$8.0M</td><td data-val="109">109</td><td data-val="1166922">$1.2M</td><td data-val="14.50">14.5%</td></tr>
+<tr><td>11</td><td><a href="https://articulo.mercadolibre.com.ar/MLA-1676979247-batidora-planetaria-3-en-1-tivoli-5-litros-1200w-bate-mezcla-amasa-rojo-50-hz60-hz-_JM" target="_blank">Batidora Planetaria 3 En 1 Tivoli 5 Litros 1200w Bate M</a></td><td data-val="7339844">$7.3M</td><td data-val="46">46</td><td data-val="1710184">$1.7M</td><td data-val="23.30">23.3%</td></tr>
+<tr><td>12</td><td><a href="https://articulo.mercadolibre.com.ar/MLA-2541925152-batidora-de-pie-planetaria-digital-3-en-1-tivoli-52l-1200w-color-negro-frecuencia-50-hz60-hz-_JM" target="_blank">Batidora De Pie Planetaria Digital 3 En 1 Tivoli 5,2l 1</a></td><td data-val="7067802">$7.1M</td><td data-val="44">44</td><td data-val="1024106">$1.0M</td><td data-val="14.49">14.5%</td></tr>
+<tr><td>13</td><td><a href="https://articulo.mercadolibre.com.ar/MLA-2045911608-aspiradora-de-mano-vertical-2-en-1-tivoli-800w-accesorios-color-negro-_JM" target="_blank">Aspiradora De Mano Vertical 2 En 1 Tivoli 800w - Acceso</a></td><td data-val="6702716">$6.7M</td><td data-val="94">94</td><td data-val="971894">$972K</td><td data-val="14.50">14.5%</td></tr>
+<tr><td>14</td><td><a href="https://articulo.mercadolibre.com.ar/MLA-1811065524-mini-compresor-portatil-cycplus-as2-100psi-usb-c-negro-bici-y-auto-50-60hz-monofasica-_JM" target="_blank">Mini Compresor Portátil Cycplus As2 100psi Usb-c Negro </a></td><td data-val="6199926">$6.2M</td><td data-val="88">88</td><td data-val="878835">$879K</td><td data-val="14.17">14.2%</td></tr>
+<tr><td>15</td><td><a href="https://articulo.mercadolibre.com.ar/MLA-1495859737-batidora-de-pie-planetaria-digital-3-en-1-tivoli-52l-1200w-color-negro-frecuencia-50-hz60-hz-_JM" target="_blank">Batidora De Pie Planetaria Digital 3 En 1 Tivoli 5,2l 1</a></td><td data-val="5356729">$5.4M</td><td data-val="31">31</td><td data-val="1246953">$1.2M</td><td data-val="23.28">23.3%</td></tr>
+</tbody></table>
+</div>
+<div class="section-title">Por Categoría</div>
+<div class="table-card table-scroll">
+<table id="tbl-cat">
+<thead><tr><th onclick="srt('tbl-cat',0)">Categoría</th><th onclick="srt('tbl-cat',1)">GMV</th><th onclick="srt('tbl-cat',2)">Unidades</th><th onclick="srt('tbl-cat',3)">% del Total</th></tr></thead><tbody>
+<tr><td>MLA10085</td><td data-val="89886650">$89.9M</td><td data-val="574">574</td><td data-val="27.68">27.7%</td></tr>
+<tr><td>De Aire</td><td data-val="59305537">$59.3M</td><td data-val="679">679</td><td data-val="18.26">18.3%</td></tr>
+<tr><td>MLA416847</td><td data-val="23860131">$23.9M</td><td data-val="664">664</td><td data-val="7.35">7.3%</td></tr>
+<tr><td>Microondas</td><td data-val="17406013">$17.4M</td><td data-val="119">119</td><td data-val="5.36">5.4%</td></tr>
+<tr><td>MLA4340</td><td data-val="17189307">$17.2M</td><td data-val="632">632</td><td data-val="5.29">5.3%</td></tr>
+<tr><td>MLA4622</td><td data-val="16004586">$16.0M</td><td data-val="184">184</td><td data-val="4.93">4.9%</td></tr>
+<tr><td>Procesadoras</td><td data-val="11158200">$11.2M</td><td data-val="145">145</td><td data-val="3.44">3.4%</td></tr>
+<tr><td>Parlantes Portátiles</td><td data-val="9259177">$9.3M</td><td data-val="80">80</td><td data-val="2.85">2.9%</td></tr>
+<tr><td>Compresores</td><td data-val="9125741">$9.1M</td><td data-val="132">132</td><td data-val="2.81">2.8%</td></tr>
+<tr><td>Aspiradoras</td><td data-val="8410078">$8.4M</td><td data-val="115">115</td><td data-val="2.59">2.6%</td></tr>
+<tr><td>MLA126142</td><td data-val="7437154">$7.4M</td><td data-val="157">157</td><td data-val="2.29">2.3%</td></tr>
+<tr><td>Lámparas de Techo</td><td data-val="6827665">$6.8M</td><td data-val="242">242</td><td data-val="2.10">2.1%</td></tr>
+<tr><td>Sillas Gamer</td><td data-val="5258430">$5.3M</td><td data-val="29">29</td><td data-val="1.62">1.6%</td></tr>
+<tr><td>MLA409403</td><td data-val="4267025">$4.3M</td><td data-val="128">128</td><td data-val="1.31">1.3%</td></tr>
+<tr><td>Exprimidores Eléctricos</td><td data-val="4052108">$4.1M</td><td data-val="108">108</td><td data-val="1.25">1.2%</td></tr>
+<tr><td>MLA5232</td><td data-val="3733939">$3.7M</td><td data-val="61">61</td><td data-val="1.15">1.1%</td></tr>
+<tr><td>Lijadoras</td><td data-val="3609036">$3.6M</td><td data-val="53">53</td><td data-val="1.11">1.1%</td></tr>
+<tr><td>Aspiradoras Robot</td><td data-val="2620985">$2.6M</td><td data-val="20">20</td><td data-val="0.81">0.8%</td></tr>
+<tr><td>MLA104680</td><td data-val="2597446">$2.6M</td><td data-val="49">49</td><td data-val="0.80">0.8%</td></tr>
+<tr><td>Peladoras Caninas</td><td data-val="2458432">$2.5M</td><td data-val="13">13</td><td data-val="0.76">0.8%</td></tr>
+<tr><td>MLA373611</td><td data-val="2457592">$2.5M</td><td data-val="38">38</td><td data-val="0.76">0.8%</td></tr>
+<tr><td>Eléctricos</td><td data-val="2415895">$2.4M</td><td data-val="65">65</td><td data-val="0.74">0.7%</td></tr>
+<tr><td>MLA371883</td><td data-val="2116544">$2.1M</td><td data-val="33">33</td><td data-val="0.65">0.7%</td></tr>
+<tr><td>MLA30840</td><td data-val="2059026">$2.1M</td><td data-val="18">18</td><td data-val="0.63">0.6%</td></tr>
+<tr><td>Burbujeros</td><td data-val="1931635">$1.9M</td><td data-val="87">87</td><td data-val="0.59">0.6%</td></tr>
+<tr><td>MLA414164</td><td data-val="1521687">$1.5M</td><td data-val="50">50</td><td data-val="0.47">0.5%</td></tr>
+<tr><td>MLA9554</td><td data-val="1386295">$1.4M</td><td data-val="87">87</td><td data-val="0.43">0.4%</td></tr>
+<tr><td>MLA126135</td><td data-val="1005653">$1.0M</td><td data-val="39">39</td><td data-val="0.31">0.3%</td></tr>
+<tr><td>Aspiradoras</td><td data-val="872995">$873K</td><td data-val="5">5</td><td data-val="0.27">0.3%</td></tr>
+<tr><td>Auriculares</td><td data-val="630674">$631K</td><td data-val="28">28</td><td data-val="0.19">0.2%</td></tr>
+<tr><td>Tostadoras</td><td data-val="576637">$577K</td><td data-val="19">19</td><td data-val="0.18">0.2%</td></tr>
+<tr><td>MLA30803</td><td data-val="550986">$551K</td><td data-val="14">14</td><td data-val="0.17">0.2%</td></tr>
+<tr><td>Contadoras de Billetes</td><td data-val="474854">$475K</td><td data-val="6">6</td><td data-val="0.15">0.1%</td></tr>
+<tr><td>Soportes para Parlantes</td><td data-val="360763">$361K</td><td data-val="18">18</td><td data-val="0.11">0.1%</td></tr>
+<tr><td>MLA74278</td><td data-val="305565">$306K</td><td data-val="5">5</td><td data-val="0.09">0.1%</td></tr>
+<tr><td>MLA5229</td><td data-val="269994">$270K</td><td data-val="6">6</td><td data-val="0.08">0.1%</td></tr>
+<tr><td>MLA456969</td><td data-val="222017">$222K</td><td data-val="5">5</td><td data-val="0.07">0.1%</td></tr>
+<tr><td>MLA418043</td><td data-val="199998">$200K</td><td data-val="2">2</td><td data-val="0.06">0.1%</td></tr>
+<tr><td>MLA373504</td><td data-val="124792">$125K</td><td data-val="15">15</td><td data-val="0.04">0.0%</td></tr>
+<tr><td>Transformadores y Fuentes</td><td data-val="108434">$108K</td><td data-val="13">13</td><td data-val="0.03">0.0%</td></tr>
+<tr><td>MLA417835</td><td data-val="99816">$100K</td><td data-val="4">4</td><td data-val="0.03">0.0%</td></tr>
+<tr><td>MLA455865</td><td data-val="98396">$98K</td><td data-val="4">4</td><td data-val="0.03">0.0%</td></tr>
+<tr><td>Otros</td><td data-val="89391">$89K</td><td data-val="9">9</td><td data-val="0.03">0.0%</td></tr>
+<tr><td>Otros</td><td data-val="59998">$60K</td><td data-val="2">2</td><td data-val="0.02">0.0%</td></tr>
+<tr><td>Bases Elevadoras</td><td data-val="57596">$58K</td><td data-val="4">4</td><td data-val="0.02">0.0%</td></tr>
+<tr><td>Pistolas de Agua</td><td data-val="56999">$57K</td><td data-val="1">1</td><td data-val="0.02">0.0%</td></tr>
+<tr><td>Manuales</td><td data-val="46000">$46K</td><td data-val="1">1</td><td data-val="0.01">0.0%</td></tr>
+<tr><td>Otros</td><td data-val="42728">$43K</td><td data-val="16">16</td><td data-val="0.01">0.0%</td></tr>
+<tr><td>Luces de Emergencia</td><td data-val="38797">$39K</td><td data-val="3">3</td><td data-val="0.01">0.0%</td></tr>
+<tr><td>Exprimidores Manuales</td><td data-val="32999">$33K</td><td data-val="1">1</td><td data-val="0.01">0.0%</td></tr>
+<tr><td>MLA3098</td><td data-val="22119">$22K</td><td data-val="3">3</td><td data-val="0.01">0.0%</td></tr>
+<tr><td>MLA413405</td><td data-val="9998">$10K</td><td data-val="2">2</td><td data-val="0.00">0.0%</td></tr>
+<tr><td>MLA417716</td><td data-val="8999">$9K</td><td data-val="1">1</td><td data-val="0.00">0.0%</td></tr>
+</tbody></table>
+</div>
+<div class="section-title">Logística</div>
+<div class="kpi-row">
+<div class="kpi-card" style="border-left:3px solid var(--green);"><div class="kpi-label">Full</div><div class="kpi-val" style="color:var(--green);">$219.3M</div><div class="kpi-prev">3,756 unidades — 82.1% del total</div></div>
+<div class="kpi-card" style="border-left:3px solid var(--purple);"><div class="kpi-label">Flex</div><div class="kpi-val" style="color:var(--purple);">$47.9M</div><div class="kpi-prev">383 unidades — 17.9% del total</div></div>
+</div>
+</div>
+<div id="tab-horarios" class="tab-content">
+<div class="chart-card">
+<div class="chart-title">Heatmap GMV — Día × Hora</div>
+<div style="overflow-x:auto;">
+<table class="heatmap-table">
+<thead><tr><th>Día\H</th>
+<th>0</th>
+<th>1</th>
+<th>2</th>
+<th>3</th>
+<th>4</th>
+<th>5</th>
+<th>6</th>
+<th>7</th>
+<th>8</th>
+<th>9</th>
+<th>10</th>
+<th>11</th>
+<th>12</th>
+<th>13</th>
+<th>14</th>
+<th>15</th>
+<th>16</th>
+<th>17</th>
+<th>18</th>
+<th>19</th>
+<th>20</th>
+<th>21</th>
+<th>22</th>
+<th>23</th>
+</tr></thead>
+<tbody>
+<tr><th>Lun</th>
+<td style="background:rgb(26,15,50);" title="Lun 0h: $746K"></td>
+<td style="background:rgb(31,18,50);" title="Lun 1h: $896K"></td>
+<td style="background:rgb(10,6,50);" title="Lun 2h: $307K"></td>
+<td style="background:rgb(3,1,50);" title="Lun 3h: $93K"></td>
+<td style="background:rgb(6,3,50);" title="Lun 4h: $181K"></td>
+<td style="background:rgb(23,13,50);" title="Lun 5h: $675K"></td>
+<td style="background:rgb(20,12,50);" title="Lun 6h: $585K"></td>
+<td style="background:rgb(55,33,50);" title="Lun 7h: $1.6M"></td>
+<td style="background:rgb(106,63,50);" title="Lun 8h: $3.0M"></td>
+<td style="background:rgb(102,61,50);" title="Lun 9h: $2.9M"></td>
+<td style="background:rgb(160,96,50);" title="Lun 10h: $4.6M"></td>
+<td style="background:rgb(120,72,50);" title="Lun 11h: $3.4M"></td>
+<td style="background:rgb(127,76,50);" title="Lun 12h: $3.6M"></td>
+<td style="background:rgb(101,60,50);" title="Lun 13h: $2.9M"></td>
+<td style="background:rgb(95,57,50);" title="Lun 14h: $2.7M"></td>
+<td style="background:rgb(126,75,50);" title="Lun 15h: $3.6M"></td>
+<td style="background:rgb(111,66,50);" title="Lun 16h: $3.2M"></td>
+<td style="background:rgb(139,83,50);" title="Lun 17h: $4.0M"></td>
+<td style="background:rgb(127,76,50);" title="Lun 18h: $3.6M"></td>
+<td style="background:rgb(255,153,50);" title="Lun 19h: $7.3M"></td>
+<td style="background:rgb(162,97,50);" title="Lun 20h: $4.6M"></td>
+<td style="background:rgb(164,98,50);" title="Lun 21h: $4.7M"></td>
+<td style="background:rgb(140,84,50);" title="Lun 22h: $4.0M"></td>
+<td style="background:rgb(51,30,50);" title="Lun 23h: $1.5M"></td>
+</tr>
+<tr><th>Mar</th>
+<td style="background:rgb(27,16,50);" title="Mar 0h: $794K"></td>
+<td style="background:rgb(22,13,50);" title="Mar 1h: $636K"></td>
+<td style="background:rgb(9,5,50);" title="Mar 2h: $262K"></td>
+<td style="background:rgb(3,1,50);" title="Mar 3h: $103K"></td>
+<td style="background:rgb(0,0,50);" title="Mar 4h: —"></td>
+<td style="background:rgb(9,5,50);" title="Mar 5h: $274K"></td>
+<td style="background:rgb(8,4,50);" title="Mar 6h: $234K"></td>
+<td style="background:rgb(45,27,50);" title="Mar 7h: $1.3M"></td>
+<td style="background:rgb(64,38,50);" title="Mar 8h: $1.8M"></td>
+<td style="background:rgb(116,69,50);" title="Mar 9h: $3.3M"></td>
+<td style="background:rgb(88,52,50);" title="Mar 10h: $2.5M"></td>
+<td style="background:rgb(144,86,50);" title="Mar 11h: $4.1M"></td>
+<td style="background:rgb(107,64,50);" title="Mar 12h: $3.1M"></td>
+<td style="background:rgb(129,77,50);" title="Mar 13h: $3.7M"></td>
+<td style="background:rgb(140,84,50);" title="Mar 14h: $4.0M"></td>
+<td style="background:rgb(151,90,50);" title="Mar 15h: $4.3M"></td>
+<td style="background:rgb(136,81,50);" title="Mar 16h: $3.9M"></td>
+<td style="background:rgb(131,78,50);" title="Mar 17h: $3.8M"></td>
+<td style="background:rgb(190,114,50);" title="Mar 18h: $5.4M"></td>
+<td style="background:rgb(211,126,50);" title="Mar 19h: $6.0M"></td>
+<td style="background:rgb(152,91,50);" title="Mar 20h: $4.3M"></td>
+<td style="background:rgb(220,132,50);" title="Mar 21h: $6.3M"></td>
+<td style="background:rgb(167,100,50);" title="Mar 22h: $4.8M"></td>
+<td style="background:rgb(72,43,50);" title="Mar 23h: $2.1M"></td>
+</tr>
+<tr><th>Mié</th>
+<td style="background:rgb(16,9,50);" title="Mié 0h: $459K"></td>
+<td style="background:rgb(15,9,50);" title="Mié 1h: $439K"></td>
+<td style="background:rgb(1,0,50);" title="Mié 2h: $40K"></td>
+<td style="background:rgb(4,2,50);" title="Mié 3h: $139K"></td>
+<td style="background:rgb(6,3,50);" title="Mié 4h: $185K"></td>
+<td style="background:rgb(15,9,50);" title="Mié 5h: $432K"></td>
+<td style="background:rgb(21,12,50);" title="Mié 6h: $601K"></td>
+<td style="background:rgb(45,27,50);" title="Mié 7h: $1.3M"></td>
+<td style="background:rgb(61,36,50);" title="Mié 8h: $1.8M"></td>
+<td style="background:rgb(152,91,50);" title="Mié 9h: $4.3M"></td>
+<td style="background:rgb(186,111,50);" title="Mié 10h: $5.3M"></td>
+<td style="background:rgb(122,73,50);" title="Mié 11h: $3.5M"></td>
+<td style="background:rgb(140,84,50);" title="Mié 12h: $4.0M"></td>
+<td style="background:rgb(149,89,50);" title="Mié 13h: $4.3M"></td>
+<td style="background:rgb(120,72,50);" title="Mié 14h: $3.4M"></td>
+<td style="background:rgb(96,57,50);" title="Mié 15h: $2.7M"></td>
+<td style="background:rgb(122,73,50);" title="Mié 16h: $3.5M"></td>
+<td style="background:rgb(155,93,50);" title="Mié 17h: $4.4M"></td>
+<td style="background:rgb(175,105,50);" title="Mié 18h: $5.0M"></td>
+<td style="background:rgb(194,116,50);" title="Mié 19h: $5.5M"></td>
+<td style="background:rgb(221,132,50);" title="Mié 20h: $6.3M"></td>
+<td style="background:rgb(173,103,50);" title="Mié 21h: $5.0M"></td>
+<td style="background:rgb(161,96,50);" title="Mié 22h: $4.6M"></td>
+<td style="background:rgb(53,31,50);" title="Mié 23h: $1.5M"></td>
+</tr>
+<tr><th>Jue</th>
+<td style="background:rgb(19,11,50);" title="Jue 0h: $563K"></td>
+<td style="background:rgb(22,13,50);" title="Jue 1h: $642K"></td>
+<td style="background:rgb(11,6,50);" title="Jue 2h: $315K"></td>
+<td style="background:rgb(7,4,50);" title="Jue 3h: $209K"></td>
+<td style="background:rgb(9,5,50);" title="Jue 4h: $283K"></td>
+<td style="background:rgb(11,6,50);" title="Jue 5h: $325K"></td>
+<td style="background:rgb(23,13,50);" title="Jue 6h: $666K"></td>
+<td style="background:rgb(34,20,50);" title="Jue 7h: $986K"></td>
+<td style="background:rgb(73,43,50);" title="Jue 8h: $2.1M"></td>
+<td style="background:rgb(90,54,50);" title="Jue 9h: $2.6M"></td>
+<td style="background:rgb(89,53,50);" title="Jue 10h: $2.5M"></td>
+<td style="background:rgb(78,46,50);" title="Jue 11h: $2.2M"></td>
+<td style="background:rgb(37,22,50);" title="Jue 12h: $1.1M"></td>
+<td style="background:rgb(78,46,50);" title="Jue 13h: $2.2M"></td>
+<td style="background:rgb(76,45,50);" title="Jue 14h: $2.2M"></td>
+<td style="background:rgb(123,73,50);" title="Jue 15h: $3.5M"></td>
+<td style="background:rgb(55,33,50);" title="Jue 16h: $1.6M"></td>
+<td style="background:rgb(86,51,50);" title="Jue 17h: $2.5M"></td>
+<td style="background:rgb(103,61,50);" title="Jue 18h: $3.0M"></td>
+<td style="background:rgb(89,53,50);" title="Jue 19h: $2.5M"></td>
+<td style="background:rgb(77,46,50);" title="Jue 20h: $2.2M"></td>
+<td style="background:rgb(63,37,50);" title="Jue 21h: $1.8M"></td>
+<td style="background:rgb(77,46,50);" title="Jue 22h: $2.2M"></td>
+<td style="background:rgb(18,10,50);" title="Jue 23h: $541K"></td>
+</tr>
+<tr><th>Vie</th>
+<td style="background:rgb(28,16,50);" title="Vie 0h: $815K"></td>
+<td style="background:rgb(13,7,50);" title="Vie 1h: $394K"></td>
+<td style="background:rgb(5,3,50);" title="Vie 2h: $146K"></td>
+<td style="background:rgb(3,1,50);" title="Vie 3h: $86K"></td>
+<td style="background:rgb(1,0,50);" title="Vie 4h: $52K"></td>
+<td style="background:rgb(8,4,50);" title="Vie 5h: $248K"></td>
+<td style="background:rgb(21,12,50);" title="Vie 6h: $626K"></td>
+<td style="background:rgb(42,25,50);" title="Vie 7h: $1.2M"></td>
+<td style="background:rgb(61,36,50);" title="Vie 8h: $1.7M"></td>
+<td style="background:rgb(89,53,50);" title="Vie 9h: $2.5M"></td>
+<td style="background:rgb(81,48,50);" title="Vie 10h: $2.3M"></td>
+<td style="background:rgb(62,37,50);" title="Vie 11h: $1.8M"></td>
+<td style="background:rgb(76,45,50);" title="Vie 12h: $2.2M"></td>
+<td style="background:rgb(72,43,50);" title="Vie 13h: $2.1M"></td>
+<td style="background:rgb(74,44,50);" title="Vie 14h: $2.1M"></td>
+<td style="background:rgb(67,40,50);" title="Vie 15h: $1.9M"></td>
+<td style="background:rgb(50,30,50);" title="Vie 16h: $1.4M"></td>
+<td style="background:rgb(89,53,50);" title="Vie 17h: $2.5M"></td>
+<td style="background:rgb(96,57,50);" title="Vie 18h: $2.7M"></td>
+<td style="background:rgb(53,31,50);" title="Vie 19h: $1.5M"></td>
+<td style="background:rgb(92,55,50);" title="Vie 20h: $2.6M"></td>
+<td style="background:rgb(65,39,50);" title="Vie 21h: $1.9M"></td>
+<td style="background:rgb(42,25,50);" title="Vie 22h: $1.2M"></td>
+<td style="background:rgb(20,12,50);" title="Vie 23h: $577K"></td>
+</tr>
+<tr><th>Sáb</th>
+<td style="background:rgb(19,11,50);" title="Sáb 0h: $566K"></td>
+<td style="background:rgb(3,1,50);" title="Sáb 1h: $114K"></td>
+<td style="background:rgb(2,1,50);" title="Sáb 2h: $65K"></td>
+<td style="background:rgb(4,2,50);" title="Sáb 3h: $135K"></td>
+<td style="background:rgb(0,0,50);" title="Sáb 4h: —"></td>
+<td style="background:rgb(0,0,50);" title="Sáb 5h: —"></td>
+<td style="background:rgb(3,1,50);" title="Sáb 6h: $106K"></td>
+<td style="background:rgb(11,6,50);" title="Sáb 7h: $327K"></td>
+<td style="background:rgb(56,33,50);" title="Sáb 8h: $1.6M"></td>
+<td style="background:rgb(55,33,50);" title="Sáb 9h: $1.6M"></td>
+<td style="background:rgb(57,34,50);" title="Sáb 10h: $1.6M"></td>
+<td style="background:rgb(73,43,50);" title="Sáb 11h: $2.1M"></td>
+<td style="background:rgb(64,38,50);" title="Sáb 12h: $1.8M"></td>
+<td style="background:rgb(67,40,50);" title="Sáb 13h: $1.9M"></td>
+<td style="background:rgb(50,30,50);" title="Sáb 14h: $1.4M"></td>
+<td style="background:rgb(83,49,50);" title="Sáb 15h: $2.4M"></td>
+<td style="background:rgb(48,28,50);" title="Sáb 16h: $1.4M"></td>
+<td style="background:rgb(53,31,50);" title="Sáb 17h: $1.5M"></td>
+<td style="background:rgb(64,38,50);" title="Sáb 18h: $1.8M"></td>
+<td style="background:rgb(76,45,50);" title="Sáb 19h: $2.2M"></td>
+<td style="background:rgb(70,42,50);" title="Sáb 20h: $2.0M"></td>
+<td style="background:rgb(30,18,50);" title="Sáb 21h: $879K"></td>
+<td style="background:rgb(53,31,50);" title="Sáb 22h: $1.5M"></td>
+<td style="background:rgb(32,19,50);" title="Sáb 23h: $932K"></td>
+</tr>
+<tr><th>Dom</th>
+<td style="background:rgb(13,7,50);" title="Dom 0h: $385K"></td>
+<td style="background:rgb(9,5,50);" title="Dom 1h: $279K"></td>
+<td style="background:rgb(4,2,50);" title="Dom 2h: $122K"></td>
+<td style="background:rgb(2,1,50);" title="Dom 3h: $67K"></td>
+<td style="background:rgb(5,3,50);" title="Dom 4h: $153K"></td>
+<td style="background:rgb(1,0,50);" title="Dom 5h: $33K"></td>
+<td style="background:rgb(5,3,50);" title="Dom 6h: $169K"></td>
+<td style="background:rgb(12,7,50);" title="Dom 7h: $368K"></td>
+<td style="background:rgb(26,15,50);" title="Dom 8h: $761K"></td>
+<td style="background:rgb(32,19,50);" title="Dom 9h: $922K"></td>
+<td style="background:rgb(33,19,50);" title="Dom 10h: $947K"></td>
+<td style="background:rgb(61,36,50);" title="Dom 11h: $1.8M"></td>
+<td style="background:rgb(45,27,50);" title="Dom 12h: $1.3M"></td>
+<td style="background:rgb(58,34,50);" title="Dom 13h: $1.7M"></td>
+<td style="background:rgb(44,26,50);" title="Dom 14h: $1.3M"></td>
+<td style="background:rgb(36,21,50);" title="Dom 15h: $1.0M"></td>
+<td style="background:rgb(17,10,50);" title="Dom 16h: $486K"></td>
+<td style="background:rgb(50,30,50);" title="Dom 17h: $1.4M"></td>
+<td style="background:rgb(57,34,50);" title="Dom 18h: $1.6M"></td>
+<td style="background:rgb(72,43,50);" title="Dom 19h: $2.1M"></td>
+<td style="background:rgb(46,27,50);" title="Dom 20h: $1.3M"></td>
+<td style="background:rgb(46,27,50);" title="Dom 21h: $1.3M"></td>
+<td style="background:rgb(46,27,50);" title="Dom 22h: $1.3M"></td>
+<td style="background:rgb(59,35,50);" title="Dom 23h: $1.7M"></td>
+</tr>
+</tbody></table>
+</div>
+</div>
+<div class="two-col">
+<div class="chart-card">
+<div class="chart-title">GMV Promedio por Hora</div>
+<div class="chart-wrap" style="height:280px;"><canvas id="c-hourly"></canvas></div>
+</div>
+<div class="chart-card">
+<div class="chart-title">Promedio Diario por Día de la Semana</div>
+<div class="chart-wrap" style="height:280px;"><canvas id="c-dow"></canvas></div>
+</div>
+</div>
+</div>
+<div id="tab-stock" class="tab-content">
+<div class="info-box"><strong>Nota:</strong> Para ver stock preciso por SKU, colocá el archivo <strong>stock_externo.xlsx</strong> en la carpeta ml_agent/ con columnas: sku, descripcion, stock_deposito, stock_full</div>
+<div class="section-title">Full (Fulfillment) — 464 publicaciones</div>
+<div class="table-card table-scroll">
+<table id="tbl-full">
+<thead><tr><th onclick="srt('tbl-full',0)">Producto</th><th onclick="srt('tbl-full',1)">Tipo</th><th onclick="srt('tbl-full',2)">Stock Disponible</th><th onclick="srt('tbl-full',3)">Ventas Mes</th><th onclick="srt('tbl-full',4)">Health %</th></tr></thead><tbody>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2050307374-fabrica-de-mini-donas-tivoli-donuts-maker-750w-placas-antiadherentes-color-negro-_JM" target="_blank">Fabrica De Mini Donas Tivoli Donuts Maker 750w - Placas</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="140">140</td><td data-val="328">328</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2050381862-fabrica-de-mini-donas-tivoli-donuts-maker-750w-placas-antiadherentes-color-negro-_JM" target="_blank">Fabrica De Mini Donas Tivoli Donuts Maker 750w - Placas</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="666">666</td><td data-val="255">255</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2044337902-cafetera-electrica-de-filtro-tivoli-125-litros-750w-luz-led-color-negro-_JM" target="_blank">Cafetera Eléctrica De Filtro Tivoli 1,25 Litros 750w Lu</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="1040">1,040</td><td data-val="201">201</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2044344286-cafetera-de-filtro-tivoli-18l-900w-negra-12-tazas-antigoteo-color-negro-_JM" target="_blank">Cafetera De Filtro Tivoli 1,8l 900w Negra 12 Tazas, Ant</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="652">652</td><td data-val="177">177</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-1487778899-panel-led-cuadrado-para-embutir-60x60-cm-luz-fria-energy-safe-4000-lumens-marco-de-aluminio-incluye-driver-blanco-_JM" target="_blank">Panel Led Cuadrado Para Embutir 60x60 Cm Luz Fría Energ</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="9">9</td><td data-val="127">127</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-3006240464-maquina-de-coser-tivoli-16-estilos-de-puntadas-2-velocidades-blanco-_JM" target="_blank">Máquina De Coser Tivoli 16 Estilos De Puntadas 2 Veloci</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="682">682</td><td data-val="119">119</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2044118672-waflera-tivoli-750w-calentamiento-rapido-placas-antiadherentes-base-antideslizante-negro-_JM" target="_blank">Waflera Tivoli 750w Calentamiento Rápido Placas Antiadh</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="122">122</td><td data-val="110">110</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2044345732-multirallador-electrico-tivoli-5-cuchillas-empujador-alimentos-color-blanco-_JM" target="_blank">Multirallador Eléctrico Tivoli 5 Cuchillas + Empujador </a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="70">70</td><td data-val="109">109</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2045911608-aspiradora-de-mano-vertical-2-en-1-tivoli-800w-accesorios-color-negro-_JM" target="_blank">Aspiradora De Mano Vertical 2 En 1 Tivoli 800w - Acceso</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="26">26</td><td data-val="94">94</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-1811065524-mini-compresor-portatil-cycplus-as2-100psi-usb-c-negro-bici-y-auto-50-60hz-monofasica-_JM" target="_blank">Mini Compresor Portátil Cycplus As2 100psi Usb-c Negro </a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="1109">1,109</td><td data-val="88">88</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2044409406-cafetera-de-filtro-tivoli-18l-900w-negra-12-tazas-antigoteo-color-negro-_JM" target="_blank">Cafetera De Filtro Tivoli 1,8l 900w Negra 12 Tazas, Ant</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="656">656</td><td data-val="85">85</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2036196286-freidora-de-aire-tivoli-9-litros-1800w-panel-digital-tactil-horno-negro-_JM" target="_blank">Freidora De Aire Tivoli 9 Litros 1800w Panel Digital Tá</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="157">157</td><td data-val="75">75</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2077361436-batidora-de-pie-planetaria-digital-3-en-1-tivoli-52l-1200w-color-rojo-frecuencia-50-hz-60-hz-_JM" target="_blank">Batidora De Pie Planetaria Digital 3 En 1 Tivoli 5,2l 1</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="26">26</td><td data-val="74">74</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-1428649043-yogurtera-electrica-tivoli-12-litros-7-frascos-de-180ml-bajo-consumo-blanco-_JM" target="_blank">Yogurtera Eléctrica Tivoli 1,2 Litros 7 Frascos De 180m</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="36">36</td><td data-val="66">66</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2472161272-exprimidor-de-jugo-tivoli-1l-40w-2-conos-base-antideslizante-blanco-50-hz60-hz-_JM" target="_blank">Exprimidor De Jugo Tivoli 1l 40w 2 Conos Base Antidesli</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="6">6</td><td data-val="56">56</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2044086398-cafetera-de-filtro-tivoli-18l-900w-negra-12-tazas-antigoteo-color-negro-_JM" target="_blank">Cafetera De Filtro Tivoli 1,8l 900w Negra 12 Tazas, Ant</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="652">652</td><td data-val="54">54</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2077390262-batidora-de-pie-planetaria-digital-3-en-1-tivoli-52l-1200w-color-rojo-frecuencia-50-hz-60-hz-_JM" target="_blank">Batidora De Pie Planetaria Digital 3 En 1 Tivoli 5,2l 1</a></td><td><span class="pill pill-yellow">Premium</span></td><td data-val="1">1</td><td data-val="54">54</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2075182182-horno-electrico-y-freidora-de-aire-tivoli-116-litros-1200w-color-negro-_JM" target="_blank">Horno Eléctrico Y Freidora De Aire Tivoli 11,6 Litros 1</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="397">397</td><td data-val="46">46</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2580998182-lijadora-roto-orbital-tivoli-350w-con-bolsa-azul-50-hz-_JM" target="_blank">Lijadora Roto Orbital Tivoli 350w Con Bolsa Azul 50 Hz</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="459">459</td><td data-val="46">46</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2050281478-fabrica-de-mini-donas-tivoli-donuts-maker-750w-placas-antiadherentes-color-negro-_JM" target="_blank">Fabrica De Mini Donas Tivoli Donuts Maker 750w - Placas</a></td><td><span class="pill pill-yellow">Premium</span></td><td data-val="230">230</td><td data-val="44">44</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2541925152-batidora-de-pie-planetaria-digital-3-en-1-tivoli-52l-1200w-color-negro-frecuencia-50-hz60-hz-_JM" target="_blank">Batidora De Pie Planetaria Digital 3 En 1 Tivoli 5,2l 1</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="14">14</td><td data-val="44">44</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2044157576-balanza-digital-bano-tivoli-bluetooth-sensor-temperatura-color-negro-_JM" target="_blank">Balanza Digital Baño Tivoli Bluetooth Sensor Temperatur</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="548">548</td><td data-val="42">42</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2044105594-balanza-digital-bano-tivoli-bluetooth-sensor-temperatura-color-negro-_JM" target="_blank">Balanza Digital Baño Tivoli Bluetooth Sensor Temperatur</a></td><td><span class="pill pill-yellow">Premium</span></td><td data-val="548">548</td><td data-val="41">41</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2044107336-exprimidor-electrico-de-jugo-tivoli-400ml-350w-dos-tamanos-base-antideslizante-plateado-50-hz60-hz-_JM" target="_blank">Exprimidor Eléctrico De Jugo Tivoli 400ml 350w - Dos Ta</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="336">336</td><td data-val="40">40</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2044073390-cafetera-de-filtro-tivoli-18l-900w-negra-12-tazas-antigoteo-color-negro-_JM" target="_blank">Cafetera De Filtro Tivoli 1,8l 900w Negra 12 Tazas, Ant</a></td><td><span class="pill pill-yellow">Premium</span></td><td data-val="652">652</td><td data-val="38">38</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2581073880-taladro-inalambrico-tivoli-atornillador-maletin-con-mechas-azul-5060hz-_JM" target="_blank">Taladro Inalámbrico Tivoli Atornillador + Maletín Con M</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="4">4</td><td data-val="36">36</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2044390230-cafetera-electrica-de-filtro-tivoli-125-litros-750w-luz-led-color-negro-_JM" target="_blank">Cafetera Eléctrica De Filtro Tivoli 1,25 Litros 750w Lu</a></td><td><span class="pill pill-yellow">Premium</span></td><td data-val="1040">1,040</td><td data-val="35">35</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-1881744306-plafon-lampara-led-techo-redondo-20cm-luz-fria-18w-pack-x-4-blanco-_JM" target="_blank">Plafón Lámpara Led Techo Redondo 20cm Luz Fría 18w Pack</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="1">1</td><td data-val="33">33</td><td data-val="77" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:77px;background:var(--yellow);"></span> <span style="color:var(--yellow);">77%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-1484881317-freidora-de-aire-tivoli-9-litros-1800w-panel-digital-tactil-horno-negro-_JM" target="_blank">Freidora De Aire Tivoli 9 Litros 1800w Panel Digital Tá</a></td><td><span class="pill pill-yellow">Premium</span></td><td data-val="157">157</td><td data-val="32">32</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-1495859737-batidora-de-pie-planetaria-digital-3-en-1-tivoli-52l-1200w-color-negro-frecuencia-50-hz60-hz-_JM" target="_blank">Batidora De Pie Planetaria Digital 3 En 1 Tivoli 5,2l 1</a></td><td><span class="pill pill-yellow">Premium</span></td><td data-val="652">652</td><td data-val="31">31</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+</tbody></table>
+</div>
+<div class="section-title">Flex (Cross Docking) — 213 publicaciones</div>
+<div class="table-card table-scroll">
+<table id="tbl-flex">
+<thead><tr><th onclick="srt('tbl-flex',0)">Producto</th><th onclick="srt('tbl-flex',1)">Tipo</th><th onclick="srt('tbl-flex',2)">Stock Disponible</th><th onclick="srt('tbl-flex',3)">Ventas Mes</th><th onclick="srt('tbl-flex',4)">Health %</th></tr></thead><tbody>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2861249332-batidora-planetaria-3-en-1-tivoli-5-litros-1200w-bate-mezcla-amasa-rojo-50-hz60-hz-_JM" target="_blank">Batidora Planetaria 3 En 1 Tivoli 5 Litros 1200w Bate M</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="729">729</td><td data-val="218">218</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-1676979247-batidora-planetaria-3-en-1-tivoli-5-litros-1200w-bate-mezcla-amasa-rojo-50-hz60-hz-_JM" target="_blank">Batidora Planetaria 3 En 1 Tivoli 5 Litros 1200w Bate M</a></td><td><span class="pill pill-yellow">Premium</span></td><td data-val="729">729</td><td data-val="46">46</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-3219579468-batidora-planetaria-3-en-1-tivoli-5-litros-1200w-bate-mezcla-amasa-rojo-50-hz60-hz-gris-_JM" target="_blank">Batidora Planetaria 3 En 1 Tivoli 5 Litros 1200w Bate M</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="461">461</td><td data-val="26">26</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2797428178-maletin-de-arte-rosa-nena-girl-145-piezas-kit-escolar-dibujo-arte-_JM" target="_blank">Maletín De Arte Rosa Nena Girl 145 Piezas Kit Escolar, </a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="796">796</td><td data-val="10">10</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-1793749050-compresor-de-aire-mini-a-bateria-portatil-cycplus-a8-negro-bifasica-_JM" target="_blank">Compresor De Aire Mini A Batería Portátil Cycplus A8 Ne</a></td><td><span class="pill pill-yellow">Premium</span></td><td data-val="217">217</td><td data-val="7">7</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-1677070007-batidora-planetaria-3-en-1-tivoli-5-litros-1200w-bate-mezcla-amasa-rojo-50-hz60-hz-_JM" target="_blank">Batidora Planetaria 3 En 1 Tivoli 5 Litros 1200w Bate M</a></td><td><span class="pill pill-yellow">Premium</span></td><td data-val="729">729</td><td data-val="7">7</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-1763063679-cafetera-de-filtro-tivoli-18l-900w-negra-12-tazas-antigoteo-color-negro-_JM" target="_blank">Cafetera De Filtro Tivoli 1,8l 900w Negra 12 Tazas, Ant</a></td><td><span class="pill pill-yellow">Premium</span></td><td data-val="652">652</td><td data-val="7">7</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-3228040612-fabrica-de-mini-donas-tivoli-donuts-maker-750w-placas-antiadherentes-color-negro-_JM" target="_blank">Fabrica De Mini Donas Tivoli Donuts Maker 750w - Placas</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="666">666</td><td data-val="6">6</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-1758774369-batidora-planetaria-3-en-1-tivoli-5-litros-1200w-bate-mezcla-amasa-rojo-50-hz60-hz-gris-_JM" target="_blank">Batidora Planetaria 3 En 1 Tivoli 5 Litros 1200w Bate M</a></td><td><span class="pill pill-yellow">Premium</span></td><td data-val="461">461</td><td data-val="5">5</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-3228040604-fabrica-de-mini-donas-tivoli-donuts-maker-750w-placas-anti-negro-_JM" target="_blank">Fabrica De Mini Donas Tivoli Donuts Maker 750w - Placas</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="666">666</td><td data-val="4">4</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2044196642-balanza-digital-bano-tivoli-bluetooth-sensor-temperatura-color-negro-_JM" target="_blank">Balanza Digital Baño Tivoli Bluetooth Sensor Temperatur</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="548">548</td><td data-val="4">4</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-916559916-ejercitador-abdominal-de-piso-suzuki-time-simple-_JM" target="_blank">Ejercitador Abdominal De Piso Suzuki Time Simple</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="518">518</td><td data-val="3">3</td><td data-val="50" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:50px;background:var(--red);"></span> <span style="color:var(--red);">50%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-3163394534-parlante-portatil-bluetooth-tivoli-2500w-microfono-karaoke-radio-fm-color-negro-_JM" target="_blank">Parlante Portátil Bluetooth Tivoli 2500w Micrófono Kara</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="891">891</td><td data-val="3">3</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-3227741468-tostadora-electrica-tivoli-700w-6-niveles-doble-ranura-color-blanco-_JM" target="_blank">Tostadora Eléctrica Tivoli 700w 6 Niveles - Doble Ranur</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="1522">1,522</td><td data-val="3">3</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-3227985734-cafetera-electrica-de-filtro-tivoli-125-litros-750w-luz-led-color-negro-_JM" target="_blank">Cafetera Eléctrica De Filtro Tivoli 1,25 Litros 750w Lu</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="1040">1,040</td><td data-val="3">3</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-3284690570-lijadora-roto-orbital-tivoli-350w-con-bolsa-azul-50-hz-_JM" target="_blank">Lijadora Roto Orbital Tivoli 350w Con Bolsa Azul 50 Hz</a></td><td><span class="pill pill-yellow">Premium</span></td><td data-val="459">459</td><td data-val="3">3</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2009635588-camara-de-seguridad-y-vigilancia-aiwa-interior-2mp-fhd-doble-lente-color-blanco-_JM" target="_blank">Cámara De Seguridad Y Vigilancia Aiwa Interior 2mp Fhd </a></td><td><span class="pill pill-yellow">Premium</span></td><td data-val="364">364</td><td data-val="2">2</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2541782488-yogurtera-electrica-digital-tivoli-14l-7-frascos-display-digital-timer-programable-blanco-_JM" target="_blank">Yogurtera Eléctrica Digital Tivoli 1,4l 7 Frascos Displ</a></td><td><span class="pill pill-yellow">Premium</span></td><td data-val="1809">1,809</td><td data-val="2">2</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-3190934802-aspiradora-limpia-tapizados-doble-tanque-tivoli-500w-apto-mascotas-gris-oscuro-_JM" target="_blank">Aspiradora Limpia Tapizados Doble Tanque Tivoli 500w Ap</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="93">93</td><td data-val="2">2</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-3191034696-aspiradora-limpia-tapizados-doble-tanque-tivoli-500w-apto-mascotas-gris-oscuro-_JM" target="_blank">Aspiradora Limpia Tapizados Doble Tanque Tivoli 500w Ap</a></td><td><span class="pill pill-yellow">Premium</span></td><td data-val="93">93</td><td data-val="2">2</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-3227741862-sandwichera-electrica-tivoli-750w-antiadherente-calentamiento-automatico-negra-negro-_JM" target="_blank">Sandwichera Eléctrica Tivoli 750w Antiadherente Calenta</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="548">548</td><td data-val="2">2</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-1763114293-cafetera-electrica-de-filtro-tivoli-125-litros-750w-luz-led-color-negro-_JM" target="_blank">Cafetera Eléctrica De Filtro Tivoli 1,25 Litros 750w Lu</a></td><td><span class="pill pill-yellow">Premium</span></td><td data-val="1040">1,040</td><td data-val="2">2</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-1827456716-aspiradora-y-cortadora-de-pelo-para-mascotas-tivoli-amt-101-color-blanco-y-azul-_JM" target="_blank">Aspiradora Y Cortadora De Pelo Para Mascotas Tivoli Amt</a></td><td><span class="pill pill-yellow">Premium</span></td><td data-val="401">401</td><td data-val="1">1</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-1435083353-aspiradora-y-cortadora-de-pelo-para-mascotas-tivoli-amt-101-color-blanco-y-azul-_JM" target="_blank">Aspiradora Y Cortadora De Pelo Para Mascotas Tivoli Amt</a></td><td><span class="pill pill-yellow">Premium</span></td><td data-val="401">401</td><td data-val="1">1</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-1889253778-driver-fuente-de-alimentacion-de-24w-para-panel-led-pack-x-6-_JM" target="_blank">Driver Fuente De Alimentación De 24w Para Panel Led Pac</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="85">85</td><td data-val="1">1</td><td data-val="77" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:77px;background:var(--yellow);"></span> <span style="color:var(--yellow);">77%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-1443416937-driver-fuente-de-alimentacion-de-18w-para-panel-led-pack-x-2-_JM" target="_blank">Driver Fuente De Alimentación De 18w Para Panel Led Pac</a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="260">260</td><td data-val="1">1</td><td data-val="87" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:87px;background:var(--green);"></span> <span style="color:var(--green);">87%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2539347522-yogurtera-electrica-digital-7-frasco-14l-7-frascos-de-200ml-blanco-_JM" target="_blank">Yogurtera Eléctrica Digital 7 Frasco 1,4l 7 Frascos De </a></td><td><span class="pill pill-yellow">Premium</span></td><td data-val="1809">1,809</td><td data-val="1">1</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-1671484025-masajeador-de-mano-tivoli-infrarojo-multiuso-funcion-calor-velocidad-regulable-_JM" target="_blank">Masajeador De Mano Tivoli Infrarojo Multiuso Función Ca</a></td><td><span class="pill pill-yellow">Premium</span></td><td data-val="83">83</td><td data-val="1">1</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2797028440-maletin-de-arte-rosa-nena-girl-145-piez-kit-escolar-dibujo-_JM" target="_blank">Maletín De Arte Rosa Nena Girl 145 Piez. Kit Escolar, D</a></td><td><span class="pill pill-yellow">Premium</span></td><td data-val="796">796</td><td data-val="1">1</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-1676823209-batidora-de-pie-tivoli-5lt-1200w-accesorios-de-metal-rojo-50-hz60-hz-_JM" target="_blank">Batidora De Pie Tivoli 5lt 1200w + Accesorios De Metal </a></td><td><span class="pill pill-blue">Clásica</span></td><td data-val="729">729</td><td data-val="1">1</td><td data-val="0" title="Calidad de publicación según ML: >80% excelente, 60-80% buena, <60% necesita atención"><span class="health-bar" style="width:0px;background:var(--red);"></span> <span style="color:var(--red);">0%</span></td></tr>
+</tbody></table>
+</div>
+</div>
+<div id="tab-comisiones" class="tab-content">
+<div class="kpi-row">
+<div class="kpi-card"><div class="kpi-label">Total Comisiones</div><div class="kpi-val">$62.5M</div><div class="kpi-prev">Anterior: $53.4M</div><div class="kpi-delta bad">▲ 17.1%</div></div>
+<div class="kpi-card"><div class="kpi-label">% Comisión Promedio</div><div class="kpi-val">19.3%</div><div class="kpi-prev">Anterior: 19.5%</div><div class="kpi-delta good">▼ 1.3%</div></div>
+<div class="kpi-card"><div class="kpi-label">Neto (GMV - Comisiones)</div><div class="kpi-val">$262.2M</div><div class="kpi-prev">Anterior: $220.2M</div><div class="kpi-delta good">▲ 19.0%</div></div>
+</div>
+<div class="warn-box"><strong>Nota:</strong> El costo de envío al vendedor estará disponible cuando se habilite el scope <strong>billing:read</strong> en la app de ML.</div>
+<div class="chart-card" style="max-width:380px;">
+<div class="chart-title">Distribución GMV / Comisiones / Neto</div>
+<div class="chart-wrap" style="height:260px;"><canvas id="c-fees-donut"></canvas></div>
+</div>
+<div class="section-title">Top 20 Productos por Comisión</div>
+<div class="table-card table-scroll">
+<table id="tbl-com">
+<thead><tr><th onclick="srt('tbl-com',0)">Producto</th><th onclick="srt('tbl-com',1)">GMV</th><th onclick="srt('tbl-com',2)">Comisión</th><th onclick="srt('tbl-com',3)">% Com.</th><th onclick="srt('tbl-com',4)">Logística</th><th onclick="srt('tbl-com',5)">Tipo Pub.</th></tr></thead><tbody>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2861249332-batidora-planetaria-3-en-1-tivoli-5-litros-1200w-bate-mezcla-amasa-rojo-50-hz60-hz-_JM" target="_blank">Batidora Planetaria 3 En 1 Tivoli 5 Litros 1200w B</a></td><td data-val="30315404">$30.3M</td><td data-val="4375166">$4.4M</td><td data-val="14.43">14.4%</td><td><span class="pill pill-purple">Flex</span></td><td><span class="pill pill-blue">Clásica</span></td></tr>
+<tr><td>Freidora De Aire Digital Tivoli 6,2 Litros 1800w A</td><td data-val="23042733">$23.0M</td><td data-val="3310856">$3.3M</td><td data-val="14.37">14.4%</td><td><span class="pill pill-purple"></span></td><td><span class="pill pill-blue">—</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2050307374-fabrica-de-mini-donas-tivoli-donuts-maker-750w-placas-antiadherentes-color-negro-_JM" target="_blank">Fabrica De Mini Donas Tivoli Donuts Maker 750w - P</a></td><td data-val="10442772">$10.4M</td><td data-val="2486305">$2.5M</td><td data-val="23.81">23.8%</td><td><span class="pill pill-green">Full</span></td><td><span class="pill pill-blue">Clásica</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2077390262-batidora-de-pie-planetaria-digital-3-en-1-tivoli-52l-1200w-color-rojo-frecuencia-50-hz-60-hz-_JM" target="_blank">Batidora De Pie Planetaria Digital 3 En 1 Tivoli 5</a></td><td data-val="8884626">$8.9M</td><td data-val="2068953">$2.1M</td><td data-val="23.29">23.3%</td><td><span class="pill pill-green">Full</span></td><td><span class="pill pill-yellow">Premium</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2077361436-batidora-de-pie-planetaria-digital-3-en-1-tivoli-52l-1200w-color-rojo-frecuencia-50-hz-60-hz-_JM" target="_blank">Batidora De Pie Planetaria Digital 3 En 1 Tivoli 5</a></td><td data-val="12183642">$12.2M</td><td data-val="1766628">$1.8M</td><td data-val="14.50">14.5%</td><td><span class="pill pill-green">Full</span></td><td><span class="pill pill-blue">Clásica</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-3006240464-maquina-de-coser-tivoli-16-estilos-de-puntadas-2-velocidades-blanco-_JM" target="_blank">Máquina De Coser Tivoli 16 Estilos De Puntadas 2 V</a></td><td data-val="11547421">$11.5M</td><td data-val="1732113">$1.7M</td><td data-val="15.00">15.0%</td><td><span class="pill pill-green">Full</span></td><td><span class="pill pill-blue">Clásica</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-1676979247-batidora-planetaria-3-en-1-tivoli-5-litros-1200w-bate-mezcla-amasa-rojo-50-hz60-hz-_JM" target="_blank">Batidora Planetaria 3 En 1 Tivoli 5 Litros 1200w B</a></td><td data-val="7339844">$7.3M</td><td data-val="1710184">$1.7M</td><td data-val="23.30">23.3%</td><td><span class="pill pill-purple">Flex</span></td><td><span class="pill pill-yellow">Premium</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2050381862-fabrica-de-mini-donas-tivoli-donuts-maker-750w-placas-antiadherentes-color-negro-_JM" target="_blank">Fabrica De Mini Donas Tivoli Donuts Maker 750w - P</a></td><td data-val="10187990">$10.2M</td><td data-val="1471445">$1.5M</td><td data-val="14.44">14.4%</td><td><span class="pill pill-green">Full</span></td><td><span class="pill pill-blue">Clásica</span></td></tr>
+<tr><td>Microondas Tivoli 5 Niveles De Cocción Temporizado</td><td data-val="10392623">$10.4M</td><td data-val="1451440">$1.5M</td><td data-val="13.97">14.0%</td><td><span class="pill pill-purple"></span></td><td><span class="pill pill-blue">—</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2044337902-cafetera-electrica-de-filtro-tivoli-125-litros-750w-luz-led-color-negro-_JM" target="_blank">Cafetera Eléctrica De Filtro Tivoli 1,25 Litros 75</a></td><td data-val="4977119">$5.0M</td><td data-val="1311891">$1.3M</td><td data-val="26.36">26.4%</td><td><span class="pill pill-green">Full</span></td><td><span class="pill pill-blue">Clásica</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-1495859737-batidora-de-pie-planetaria-digital-3-en-1-tivoli-52l-1200w-color-negro-frecuencia-50-hz60-hz-_JM" target="_blank">Batidora De Pie Planetaria Digital 3 En 1 Tivoli 5</a></td><td data-val="5356729">$5.4M</td><td data-val="1246953">$1.2M</td><td data-val="23.28">23.3%</td><td><span class="pill pill-green">Full</span></td><td><span class="pill pill-yellow">Premium</span></td></tr>
+<tr><td>Freidora De Aire Digital Tivoli 6,2 Litros 1800w A</td><td data-val="4135219">$4.1M</td><td data-val="1230051">$1.2M</td><td data-val="29.75">29.7%</td><td><span class="pill pill-purple"></span></td><td><span class="pill pill-blue">—</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2036196286-freidora-de-aire-tivoli-9-litros-1800w-panel-digital-tactil-horno-negro-_JM" target="_blank">Freidora De Aire Tivoli 9 Litros 1800w Panel Digit</a></td><td data-val="8270191">$8.3M</td><td data-val="1199178">$1.2M</td><td data-val="14.50">14.5%</td><td><span class="pill pill-green">Full</span></td><td><span class="pill pill-blue">Clásica</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2044344286-cafetera-de-filtro-tivoli-18l-900w-negra-12-tazas-antigoteo-color-negro-_JM" target="_blank">Cafetera De Filtro Tivoli 1,8l 900w Negra 12 Tazas</a></td><td data-val="4777998">$4.8M</td><td data-val="1186900">$1.2M</td><td data-val="24.84">24.8%</td><td><span class="pill pill-green">Full</span></td><td><span class="pill pill-blue">Clásica</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2044345732-multirallador-electrico-tivoli-5-cuchillas-empujador-alimentos-color-blanco-_JM" target="_blank">Multirallador Eléctrico Tivoli 5 Cuchillas + Empuj</a></td><td data-val="8047731">$8.0M</td><td data-val="1166922">$1.2M</td><td data-val="14.50">14.5%</td><td><span class="pill pill-green">Full</span></td><td><span class="pill pill-blue">Clásica</span></td></tr>
+<tr><td>Freidora De Aire Digital Tivoli 6,2 Litros 1800w A</td><td data-val="4116551">$4.1M</td><td data-val="1074007">$1.1M</td><td data-val="26.09">26.1%</td><td><span class="pill pill-purple"></span></td><td><span class="pill pill-blue">—</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2541925152-batidora-de-pie-planetaria-digital-3-en-1-tivoli-52l-1200w-color-negro-frecuencia-50-hz60-hz-_JM" target="_blank">Batidora De Pie Planetaria Digital 3 En 1 Tivoli 5</a></td><td data-val="7067802">$7.1M</td><td data-val="1024106">$1.0M</td><td data-val="14.49">14.5%</td><td><span class="pill pill-green">Full</span></td><td><span class="pill pill-blue">Clásica</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2036222554-freidora-de-aire-tivoli-9-litros-1800w-panel-digital-tactil-horno-negro-_JM" target="_blank">Freidora De Aire Tivoli 9 Litros 1800w Panel Digit</a></td><td data-val="3713033">$3.7M</td><td data-val="1009945">$1.0M</td><td data-val="27.20">27.2%</td><td><span class="pill pill-green">Full</span></td><td><span class="pill pill-yellow">Premium</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2045911608-aspiradora-de-mano-vertical-2-en-1-tivoli-800w-accesorios-color-negro-_JM" target="_blank">Aspiradora De Mano Vertical 2 En 1 Tivoli 800w - A</a></td><td data-val="6702716">$6.7M</td><td data-val="971894">$972K</td><td data-val="14.50">14.5%</td><td><span class="pill pill-green">Full</span></td><td><span class="pill pill-blue">Clásica</span></td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-1484881317-freidora-de-aire-tivoli-9-litros-1800w-panel-digital-tactil-horno-negro-_JM" target="_blank">Freidora De Aire Tivoli 9 Litros 1800w Panel Digit</a></td><td data-val="4026777">$4.0M</td><td data-val="938239">$938K</td><td data-val="23.30">23.3%</td><td><span class="pill pill-green">Full</span></td><td><span class="pill pill-yellow">Premium</span></td></tr>
+</tbody></table>
+</div>
+</div>
+<div id="tab-cancelaciones" class="tab-content">
+<div class="kpi-row">
+<div class="kpi-card"><div class="kpi-label">Total Cancelaciones</div><div class="kpi-val">250</div><div class="kpi-prev">Anterior: 233</div><div class="kpi-delta bad">▲ 7.3%</div></div>
+<div class="kpi-card"><div class="kpi-label">Tasa de Cancelación</div><div class="kpi-val">5.1%</div><div class="kpi-prev">Anterior: 5.9%</div><div class="kpi-delta good">▼ 12.4%</div></div>
+</div>
+<div class="chart-card">
+<div class="chart-title">Tasa de Cancelación Mensual 2026</div>
+<div class="chart-wrap" style="height:260px;"><canvas id="c-cancel-rate"></canvas></div>
+</div>
+<div class="chart-card">
+<div class="chart-title">Top 15 Productos por Tasa de Cancelación</div>
+<div class="chart-wrap" style="height:380px;"><canvas id="c-cancel-bar"></canvas></div>
+</div>
+<div class="section-title">Detalle Cancelaciones</div>
+<div class="table-card table-scroll">
+<table id="tbl-cancels">
+<thead><tr><th onclick="srt('tbl-cancels',0)">Producto</th><th onclick="srt('tbl-cancels',1)">Cancelaciones</th><th onclick="srt('tbl-cancels',2)">Órdenes Pagadas</th><th onclick="srt('tbl-cancels',3)">Tasa %</th></tr></thead><tbody>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2044326342-parlante-portatil-bluetooth-tivoli-2500w-microfono-karaoke-radio-fm-color-negro-_JM" target="_blank">Parlante Portátil Bluetooth Tivoli 2500w Micrófono Kara</a></td><td data-val="4">4</td><td data-val="17">17</td><td data-val="19.00">19.0%</td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2044086398-cafetera-de-filtro-tivoli-18l-900w-negra-12-tazas-antigoteo-color-negro-_JM" target="_blank">Cafetera De Filtro Tivoli 1,8l 900w Negra 12 Tazas, Ant</a></td><td data-val="11">11</td><td data-val="53">53</td><td data-val="17.20">17.2%</td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2036222554-freidora-de-aire-tivoli-9-litros-1800w-panel-digital-tactil-horno-negro-_JM" target="_blank">Freidora De Aire Tivoli 9 Litros 1800w Panel Digital Tá</a></td><td data-val="5">5</td><td data-val="28">28</td><td data-val="15.20">15.2%</td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2558648992-pistola-burbujas-bazooka-rocket-automatica-con-luces-color-azul-_JM" target="_blank">Pistola Burbujas Bazooka Rocket Automática Con Luces Co</a></td><td data-val="4">4</td><td data-val="23">23</td><td data-val="14.80">14.8%</td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2044003318-parlante-portatil-bluetooth-tivoli-6000w-microfono-karaoke-radio-fm-color-negro-_JM" target="_blank">Parlante Portátil Bluetooth Tivoli 6000w Micrófono Kara</a></td><td data-val="4">4</td><td data-val="28">28</td><td data-val="12.50">12.5%</td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2044337902-cafetera-electrica-de-filtro-tivoli-125-litros-750w-luz-led-color-negro-_JM" target="_blank">Cafetera Eléctrica De Filtro Tivoli 1,25 Litros 750w Lu</a></td><td data-val="24">24</td><td data-val="195">195</td><td data-val="11.00">11.0%</td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2541925152-batidora-de-pie-planetaria-digital-3-en-1-tivoli-52l-1200w-color-negro-frecuencia-50-hz60-hz-_JM" target="_blank">Batidora De Pie Planetaria Digital 3 En 1 Tivoli 5,2l 1</a></td><td data-val="5">5</td><td data-val="44">44</td><td data-val="10.20">10.2%</td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2077361436-batidora-de-pie-planetaria-digital-3-en-1-tivoli-52l-1200w-color-rojo-frecuencia-50-hz-60-hz-_JM" target="_blank">Batidora De Pie Planetaria Digital 3 En 1 Tivoli 5,2l 1</a></td><td data-val="7">7</td><td data-val="74">74</td><td data-val="8.60">8.6%</td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2077390262-batidora-de-pie-planetaria-digital-3-en-1-tivoli-52l-1200w-color-rojo-frecuencia-50-hz-60-hz-_JM" target="_blank">Batidora De Pie Planetaria Digital 3 En 1 Tivoli 5,2l 1</a></td><td data-val="5">5</td><td data-val="54">54</td><td data-val="8.50">8.5%</td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2044409406-cafetera-de-filtro-tivoli-18l-900w-negra-12-tazas-antigoteo-color-negro-_JM" target="_blank">Cafetera De Filtro Tivoli 1,8l 900w Negra 12 Tazas, Ant</a></td><td data-val="6">6</td><td data-val="84">84</td><td data-val="6.70">6.7%</td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2044118672-waflera-tivoli-750w-calentamiento-rapido-placas-antiadherentes-base-antideslizante-negro-_JM" target="_blank">Waflera Tivoli 750w Calentamiento Rápido Placas Antiadh</a></td><td data-val="6">6</td><td data-val="107">107</td><td data-val="5.30">5.3%</td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2044345732-multirallador-electrico-tivoli-5-cuchillas-empujador-alimentos-color-blanco-_JM" target="_blank">Multirallador Eléctrico Tivoli 5 Cuchillas + Empujador </a></td><td data-val="6">6</td><td data-val="109">109</td><td data-val="5.20">5.2%</td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-3006240464-maquina-de-coser-tivoli-16-estilos-de-puntadas-2-velocidades-blanco-_JM" target="_blank">Máquina De Coser Tivoli 16 Estilos De Puntadas 2 Veloci</a></td><td data-val="6">6</td><td data-val="119">119</td><td data-val="4.80">4.8%</td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2050381862-fabrica-de-mini-donas-tivoli-donuts-maker-750w-placas-antiadherentes-color-negro-_JM" target="_blank">Fabrica De Mini Donas Tivoli Donuts Maker 750w - Placas</a></td><td data-val="12">12</td><td data-val="254">254</td><td data-val="4.50">4.5%</td></tr>
+<tr><td><a href="https://articulo.mercadolibre.com.ar/MLA-2044344286-cafetera-de-filtro-tivoli-18l-900w-negra-12-tazas-antigoteo-color-negro-_JM" target="_blank">Cafetera De Filtro Tivoli 1,8l 900w Negra 12 Tazas, Ant</a></td><td data-val="8">8</td><td data-val="170">170</td><td data-val="4.50">4.5%</td></tr>
+</tbody></table>
+</div>
+</div>
+<div id="tab-reputacion" class="tab-content">
+<div class="section-title">Reputación del Vendedor</div>
+<div style="display:flex;align-items:center;gap:16px;margin-bottom:24px;padding:20px;background:#151528;border-radius:12px;border-left:4px solid #00d4e4;">
+<div style="font-size:2.5rem;">🏅</div>
+<div><div style="font-size:1.4rem;font-weight:700;color:#00d4e4;">MercadoLíder Platinum</div><div style="color:#aaa;font-size:.9rem;">SPOTCOMPRAS · 10,717 ventas en los últimos 60 días</div></div>
+</div>
+<div class="kpi-row">
+<div class="kpi-card" style="border-left:3px solid #00A650;"><div class="kpi-label">Reclamos</div><div class="kpi-val" style="color:#00A650;font-size:1.8rem;">✅ 0.10%</div><div class="kpi-prev" style="color:#888;">límite 1%</div></div>
+<div class="kpi-card" style="border-left:3px solid #00A650;"><div class="kpi-label">Cancelaciones</div><div class="kpi-val" style="color:#00A650;font-size:1.8rem;">✅ 0.010%</div><div class="kpi-prev" style="color:#888;">límite 0.5%</div></div>
+<div class="kpi-card" style="border-left:3px solid #00A650;"><div class="kpi-label">Envíos tardíos</div><div class="kpi-val" style="color:#00A650;font-size:1.8rem;">✅ 1.56%</div><div class="kpi-prev" style="color:#888;">límite 8%</div></div>
+<div class="kpi-card" style="border-left:3px solid #00A650;"><div class="kpi-label">Calificación positiva</div><div class="kpi-val" style="color:#00A650;font-size:1.8rem;">⭐ 85%</div><div class="kpi-prev" style="color:#888;"></div></div>
+</div>
+<div class="section-title" style="margin-top:20px;">Historial de Transacciones</div>
+<div class="kpi-row">
+<div class="kpi-card"><div class="kpi-label">Concretadas</div><div class="kpi-val" style="color:#00A650;">77,347</div></div>
+<div class="kpi-card"><div class="kpi-label">Canceladas</div><div class="kpi-val" style="color:#F23D4F;">4,927</div></div>
+<div class="kpi-card"><div class="kpi-label">Total</div><div class="kpi-val" style="color:#3483FA;">82,274</div></div>
+<div class="kpi-card"><div class="kpi-label">Tasa éxito</div><div class="kpi-val" style="color:#00A650;">94.0%</div></div>
+</div>
+</div>
+<div id="tab-ads" class="tab-content">
+<div class="section-title">Inversión Publicitaria (Product Ads)</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;margin-bottom:20px;">
+<div>
+<div class="chart-card">
+<div class="chart-title">📊 Métricas Ads (carga manual)</div>
+<div class="kpi-row" style="flex-wrap:wrap;">
+<div class="kpi-card" style="min-width:140px;"><div class="kpi-label">Inversión</div><div class="kpi-val" style="color:#3483FA;">$28.4M</div></div>
+<div class="kpi-card" style="min-width:140px;"><div class="kpi-label">Ingresos por Ads</div><div class="kpi-val" style="color:#3483FA;">$343.6M</div></div>
+<div class="kpi-card" style="min-width:140px;"><div class="kpi-label">ROAS</div><div class="kpi-val" style="color:#3483FA;">12.1x</div></div>
+<div class="kpi-card" style="min-width:140px;"><div class="kpi-label">TACOS</div><div class="kpi-val" style="color:#3483FA;">8.3%</div></div>
+<div class="kpi-card" style="min-width:140px;"><div class="kpi-label">Clics</div><div class="kpi-val" style="color:#3483FA;">154,220</div></div>
+<div class="kpi-card" style="min-width:140px;"><div class="kpi-label">Impresiones</div><div class="kpi-val" style="color:#3483FA;">65,398,673</div></div>
+</div>
+</div>
+</div>
+<div><div class="chart-card">
+<div class="chart-title">🔑 Activar Ads via API</div>
+<div style="padding:16px;font-size:.88rem;line-height:1.8;">La API de Advertising de ML requiere el scope <strong style="color:#FFE600;">advertising:read</strong>.<br><br>1. Ir a <a href="https://developers.mercadolibre.com.ar" target="_blank" style="color:#3483FA;">developers.mercadolibre.com.ar</a><br>2. Tu app → Permisos → activar <strong>advertising:read</strong><br>3. Ejecutar <code>python ml_setup.py --authorize</code><br><br><strong>AdvertiserId:</strong> <code>12566</code><br>Una vez activo: inversión, ROAS, TACOS, clics, impresiones por campaña.</div></div></div>
+</div>
+<div class="section-title" style="margin-top:20px;">Distribución de Costos ML</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;">
+<div><div class="chart-card">
+<div class="chart-title">💰 Costos del Período</div>
+<div style="font-size:1.4rem;font-weight:700;color:#e0e0e0;padding:12px 0;">$168.1M</div>
+<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #1e1e3a;"><span style="color:#ccc;font-size:.85rem;">Cargos por venta (comisiones)</span><span style="color:#3483FA;font-weight:600;">$89.1M <span style="color:#888;font-size:.75rem;">(53.0%)</span></span></div>
+<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #1e1e3a;"><span style="color:#ccc;font-size:.85rem;">Inversión en Publicidad</span><span style="color:#7B2FF7;font-weight:600;">$33.8M <span style="color:#888;font-size:.75rem;">(20.1%)</span></span></div>
+<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #1e1e3a;"><span style="color:#ccc;font-size:.85rem;">Costos de envío</span><span style="color:#00A650;font-weight:600;">$30.4M <span style="color:#888;font-size:.75rem;">(18.1%)</span></span></div>
+<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #1e1e3a;"><span style="color:#ccc;font-size:.85rem;">Retenciones</span><span style="color:#F23D4F;font-weight:600;">$5.5M <span style="color:#888;font-size:.75rem;">(3.3%)</span></span></div>
+<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #1e1e3a;"><span style="color:#ccc;font-size:.85rem;">Percepciones</span><span style="color:#FF9500;font-weight:600;">$4.9M <span style="color:#888;font-size:.75rem;">(2.9%)</span></span></div>
+<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #1e1e3a;"><span style="color:#ccc;font-size:.85rem;">Cargos envíos Full</span><span style="color:#00d4e4;font-weight:600;">$2.0M <span style="color:#888;font-size:.75rem;">(1.2%)</span></span></div>
+<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #1e1e3a;"><span style="color:#ccc;font-size:.85rem;">Cargos por devolución</span><span style="color:#888;font-weight:600;">$840K <span style="color:#888;font-size:.75rem;">(0.5%)</span></span></div>
+<div class="chart-wrap" style="height:240px;margin-top:16px;"><canvas id="c-costs-donut"></canvas></div>
+</div></div>
+<div><div class="chart-card">
+<div class="chart-title">🔑 Activar Costos via API</div>
+<div style="padding:16px;font-size:.88rem;line-height:1.8;">La API de Billing requiere el scope <strong style="color:#FFE600;">billing:read</strong>.<br><br>Desbloqueará: comisiones, costos de envío, retenciones, percepciones, cargos Full, devoluciones — todo discriminado por período y provincia.<br><br>1. <a href="https://developers.mercadolibre.com.ar" target="_blank" style="color:#3483FA;">developers.mercadolibre.com.ar</a><br>2. Tu app → Permisos → <strong>billing:read</strong> + <strong>finances:read</strong><br>3. <code>python ml_setup.py --authorize</code></div></div></div>
+</div>
+</div>
+<script>
+const MONTHLY_LABELS=["Ene", "Feb", "Mar", "Abr", "May"];
+const MONTHLY_GMV=[381836935.3, 359439964.4, 444931243.57, 273685291.85, 314387054.48];
+const MONTHLY_UNITS=[7660, 8680, 7868, 3997, 4643];
+const MONTHLY_CANCEL_RATE=[4.81, 5.2, 6.41, 5.87, 5.14];
+const MONTHLY_FEES=[66752705.04, 65412127.57, 87253301.31, 53416670.12, 60716428.22];
+const DAILY_LABELS=["D\u00eda 1", "D\u00eda 2", "D\u00eda 3", "D\u00eda 4", "D\u00eda 5", "D\u00eda 6", "D\u00eda 7", "D\u00eda 8", "D\u00eda 9", "D\u00eda 10", "D\u00eda 11", "D\u00eda 12", "D\u00eda 13", "D\u00eda 14", "D\u00eda 15", "D\u00eda 16", "D\u00eda 17", "D\u00eda 18", "D\u00eda 19", "D\u00eda 20", "D\u00eda 21", "D\u00eda 22", "D\u00eda 23", "D\u00eda 24", "D\u00eda 25", "D\u00eda 26", "D\u00eda 27", "D\u00eda 28", "D\u00eda 29", "D\u00eda 30", "D\u00eda 31"];
+const DAILY_CUR=[8050734.38, 7077015.97, 9761233.95, 13478041.4, 23440205.24, 19279459.65, 19734766.58, 12177491.55, 10086049.0, 11505345.0, 51228051.03, 43576274.05, 49504048.44, 18060428.6, 14608737.63, 10918876.52, 1266380.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 970373.45, 0];
+const DAILY_PRI=[7380630.5, 8726187.7, 6710887.1, 11577855.5, 7518674.63, 10783118.63, 11425312.78, 9373394.53, 9012840.5, 7736578.0, 6106594.76, 5068849.2, 8443452.0, 8943113.22, 9196686.02, 10079301.02, 7404595.04, 5962509.07, 9190381.8, 10524448.11, 9405217.3, 11278523.84, 11154675.29, 8666876.47, 8036481.66, 9688115.16, 10384479.61, 10844271.05, 12403693.73, 7951413.93, 2676133.7];
+const DOW_RAW=[64706092.43, 67016479.29, 68783508.09, 38765568.63, 34836963.56, 28081941.49, 22532958.95];
+const DOW_COUNT=[919, 942, 939, 555, 499, 422, 335];
+const HOUR_VALS=[4328484, 3399077, 1257069, 832243, 854808, 1986473, 2987771, 7091697, 12841473, 18183337, 19863962, 18922786, 17110197, 18711323, 17171262, 19497455, 15447508, 20136361, 23235160, 27168272, 23465914, 21824102, 19605919, 8800859];
+const HEATMAP=[[745941, 895891, 307075, 93098, 181157, 675262, 585381, 1587105, 3043405, 2931946, 4576663, 3437867, 3638570, 2879038, 2711430, 3593819, 3174901, 3980612, 3623536, 7264399, 4626825, 4685945, 4001543, 1464683], [793750, 636268, 262498, 103098, 0, 274249, 233692, 1307340, 1831569, 3305291, 2515112, 4106261, 3057338, 3698195, 4011144, 4307746, 3901220, 3750656, 5436392, 6028434, 4349555, 6278155, 4761307, 2067209], [459355, 439294, 39598, 139138, 185296, 431871, 601037, 1301537, 1755182, 4334418, 5318493, 3491688, 4008781, 4252217, 3421397, 2740950, 3483764, 4435308, 5008745, 5543869, 6311818, 4950251, 4605148, 1524353], [563300, 641749, 314802, 209172, 283238, 324535, 666045, 985707, 2095752, 2570093, 2538462, 2242032, 1077600, 2233022, 2180538, 3512853, 1594141, 2470011, 2955046, 2541757, 2207099, 1818961, 2198936, 540718], [814730, 393598, 145959, 85540, 51999, 247982, 626085, 1214729, 1743930, 2549537, 2323287, 1793736, 2181881, 2068052, 2123175, 1923067, 1427693, 2539356, 2738195, 1534287, 2646066, 1875178, 1211962, 576940], [565996, 113731, 65099, 135099, 0, 0, 106472, 327248, 1610459, 1569868, 1645092, 2086995, 1842423, 1912340, 1444183, 2385477, 1379561, 1535264, 1841419, 2180993, 2008884, 878946, 1514631, 931762], [385412, 278546, 122038, 67098, 153118, 32574, 169059, 368031, 761176, 922184, 946853, 1764207, 1303604, 1668459, 1279395, 1033543, 486228, 1425154, 1631827, 2074534, 1315668, 1336665, 1312392, 1695194]];
+const CLASSIC_GMV=188980217;
+const PREMIUM_GMV=78183501;
+const CLASSIC_UNITS=3311;
+const PREMIUM_UNITS=828;
+const FLEX_GMV=47893908;
+const FULL_GMV=219269810;
+const COLECTA_GMV=0;
+const FLEX_UNITS=383;
+const FULL_UNITS=3756;
+const COLECTA_UNITS=0;
+const FEES_C=62537881.82;
+const NET_C=262185630.62;
+const GMV_C=324723512.44;
+const CANCEL_TITLES=["Parlante Port\u00e1til Bluetooth Ti", "Cafetera De Filtro Tivoli 1,8l", "Freidora De Aire Tivoli 9 Litr", "Pistola Burbujas Bazooka Rocke", "Parlante Port\u00e1til Bluetooth Ti", "Cafetera El\u00e9ctrica De Filtro T", "Batidora De Pie Planetaria Dig", "Batidora De Pie Planetaria Dig", "Batidora De Pie Planetaria Dig", "Cafetera De Filtro Tivoli 1,8l", "Waflera Tivoli 750w Calentamie", "Multirallador El\u00e9ctrico Tivoli", "M\u00e1quina De Coser Tivoli 16 Est", "Fabrica De Mini Donas Tivoli D", "Cafetera De Filtro Tivoli 1,8l"];
+const CANCEL_RATES=[19.0, 17.2, 15.2, 14.8, 12.5, 11.0, 10.2, 8.6, 8.5, 6.7, 5.3, 5.2, 4.8, 4.5, 4.5];
+</script>
+<script>
+const built=new Set();
+function T(name,btn){
+  document.querySelectorAll(".tab-content").forEach(el=>el.classList.remove("active"));
+  document.querySelectorAll(".tab-btn").forEach(el=>el.classList.remove("active"));
+  document.getElementById("tab-"+name).classList.add("active");
+  btn.classList.add("active");
+  if(!built.has(name)){built.add(name);buildC(name);}
+}
+const srtDir={};
+function srt(tid,col){
+  const tbl=document.getElementById(tid); if(!tbl) return;
+  const key=tid+"-"+col; const asc=!srtDir[key]; srtDir[key]=asc;
+  tbl.querySelectorAll("th").forEach((th,i)=>{ th.classList.remove("sorted-asc","sorted-desc"); if(i===col) th.classList.add(asc?"sorted-asc":"sorted-desc"); });
+  const tbody=tbl.querySelector("tbody");
+  Array.from(tbody.querySelectorAll("tr")).sort((a,b)=>{
+    const ca=a.cells[col],cb=b.cells[col]; if(!ca||!cb) return 0;
+    const va=ca.dataset.val!==undefined?parseFloat(ca.dataset.val):ca.textContent.trim();
+    const vb=cb.dataset.val!==undefined?parseFloat(cb.dataset.val):cb.textContent.trim();
+    if(!isNaN(va)&&!isNaN(vb)) return asc?va-vb:vb-va;
+    return asc?String(va).localeCompare(String(vb)):String(vb).localeCompare(String(va));
+  }).forEach(r=>tbody.appendChild(r));
+}
+const fmtM=v=>{ v=parseFloat(v)||0; if(v>=1e6) return "$"+(v/1e6).toFixed(1)+"M"; if(v>=1e3) return "$"+(v/1e3).toFixed(0)+"K"; return "$"+Math.round(v).toLocaleString("es-AR"); };
+const BLUE="#3483FA",YELLOW="#FFE600",GREEN="#00A650",RED="#F23D4F",PURPLE="#7B2FF7",MUTED="#666",gridColor="#1e1e3a";
+const baseOpts={responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:"#e0e0e0",boxWidth:12}}}};
+function buildC(name){
+  if(name==="resumen") buildResumen();
+  else if(name==="ventas") buildVentas();
+  else if(name==="horarios") buildHorarios();
+  else if(name==="comisiones") buildComisiones();
+  else if(name==="cancelaciones") buildCancelaciones();
+  else if(name==="ads") buildAds();
+}
+function buildResumen(){
+  const cl=document.getElementById("c-listing-type");
+  if(cl) new Chart(cl,{type:"bar",data:{labels:["Clásica","Premium"],datasets:[{label:"GMV",data:[CLASSIC_GMV,PREMIUM_GMV],backgroundColor:[BLUE,YELLOW]},{label:"Unidades",data:[CLASSIC_UNITS,PREMIUM_UNITS],backgroundColor:[BLUE+"55",YELLOW+"55"],type:"line",yAxisID:"y2"}]},options:{...baseOpts,scales:{x:{ticks:{color:MUTED},grid:{color:gridColor}},y:{ticks:{color:MUTED,callback:v=>fmtM(v)},grid:{color:gridColor}},y2:{position:"right",ticks:{color:MUTED},grid:{display:false}}}}});
+  const lg=document.getElementById("c-logistic");
+  if(lg){
+    const lgL=["Full","Flex"],lgG=[FULL_GMV,FLEX_GMV],lgU=[FULL_UNITS,FLEX_UNITS],lgC=[GREEN,PURPLE];
+    if(COLECTA_GMV>0){lgL.push("Colecta");lgG.push(COLECTA_GMV);lgU.push(COLECTA_UNITS);lgC.push(YELLOW);}
+    new Chart(lg,{type:"bar",data:{labels:lgL,datasets:[{label:"GMV",data:lgG,backgroundColor:lgC,yAxisID:"y"},{label:"Unidades",data:lgU,backgroundColor:lgC.map(c=>c+"55"),yAxisID:"y2",type:"line"}]},options:{...baseOpts,scales:{x:{ticks:{color:MUTED},grid:{color:gridColor}},y:{ticks:{color:MUTED,callback:v=>fmtM(v)},grid:{color:gridColor}},y2:{position:"right",ticks:{color:MUTED},grid:{display:false}}}}});
+  }
+}
+function buildVentas(){
+  const mg=document.getElementById("c-monthly-gmv");
+  if(mg&&MONTHLY_LABELS.length) new Chart(mg,{type:"bar",data:{labels:MONTHLY_LABELS,datasets:[{label:"GMV",data:MONTHLY_GMV,backgroundColor:BLUE+"bb",borderColor:BLUE,borderWidth:1}]},options:{...baseOpts,plugins:{legend:{labels:{color:"#e0e0e0"}},tooltip:{callbacks:{label:ctx=>fmtM(ctx.raw)}}},scales:{x:{ticks:{color:MUTED},grid:{color:gridColor}},y:{ticks:{color:MUTED,callback:v=>fmtM(v)},grid:{color:gridColor}}}}});
+  const dg=document.getElementById("c-daily-gmv");
+  if(dg) new Chart(dg,{type:"line",data:{labels:DAILY_LABELS,datasets:[{label:"Mes Actual",data:DAILY_CUR,borderColor:BLUE,backgroundColor:BLUE+"22",fill:true,tension:0.3,pointRadius:2},{label:"Mes Anterior",data:DAILY_PRI,borderColor:MUTED,borderDash:[4,3],tension:0.3,pointRadius:2}]},options:{...baseOpts,plugins:{legend:{labels:{color:"#e0e0e0"}},tooltip:{callbacks:{label:ctx=>fmtM(ctx.raw)}}},scales:{x:{ticks:{color:MUTED},grid:{color:gridColor}},y:{ticks:{color:MUTED,callback:v=>fmtM(v)},grid:{color:gridColor}}}}});
+}
+function buildHorarios(){
+  const hc=document.getElementById("c-hourly");
+  if(hc) new Chart(hc,{type:"bar",data:{labels:[...Array(24).keys()].map(h=>h+"h"),datasets:[{label:"GMV promedio/hora",data:HOUR_VALS,backgroundColor:BLUE+"aa",borderColor:BLUE,borderWidth:1}]},options:{...baseOpts,plugins:{legend:{labels:{color:"#e0e0e0"}},tooltip:{callbacks:{label:ctx=>fmtM(ctx.raw)}}},scales:{x:{ticks:{color:MUTED},grid:{color:gridColor}},y:{ticks:{color:MUTED,callback:v=>fmtM(v)},grid:{color:gridColor}}}}});
+  const dc=document.getElementById("c-dow");
+  if(dc){
+    const DAYS=["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"];
+    const totalDow=DOW_RAW.reduce((a,b)=>a+b,0)||1;
+    const avgDow=DOW_RAW.map((v,i)=>DOW_COUNT[i]?Math.round(v/DOW_COUNT[i]):0);
+    const shareDow=DOW_RAW.map(v=>((v/totalDow)*100).toFixed(1));
+    new Chart(dc,{type:"bar",data:{labels:DAYS,datasets:[{label:"GMV promedio",data:avgDow,backgroundColor:YELLOW+"bb",borderColor:YELLOW,borderWidth:1}]},options:{...baseOpts,indexAxis:"y",plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmtM(ctx.raw)+" ("+shareDow[ctx.dataIndex]+"% del total)"}}},scales:{x:{ticks:{color:MUTED,callback:v=>fmtM(v)},grid:{color:gridColor}},y:{ticks:{color:MUTED},grid:{color:gridColor}}}}});
+  }
+}
+function buildComisiones(){
+  const dd=document.getElementById("c-fees-donut");
+  if(dd) new Chart(dd,{type:"doughnut",data:{labels:["Neto","Comisiones"],datasets:[{data:[NET_C,FEES_C],backgroundColor:[GREEN+"cc",RED+"cc"],borderColor:[GREEN,RED],borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:"#e0e0e0"}},tooltip:{callbacks:{label:ctx=>ctx.label+": "+fmtM(ctx.raw)}}}}});
+}
+function buildCancelaciones(){
+  const cr=document.getElementById("c-cancel-rate");
+  if(cr&&MONTHLY_CANCEL_RATE.length) new Chart(cr,{type:"bar",data:{labels:MONTHLY_LABELS,datasets:[{label:"Tasa %",data:MONTHLY_CANCEL_RATE,backgroundColor:RED+"bb",borderColor:RED,borderWidth:1}]},options:{...baseOpts,plugins:{legend:{labels:{color:"#e0e0e0"}}},scales:{x:{ticks:{color:MUTED},grid:{color:gridColor}},y:{ticks:{color:MUTED,callback:v=>v+"%"},grid:{color:gridColor}}}}});
+  const cb=document.getElementById("c-cancel-bar");
+  if(cb) new Chart(cb,{type:"bar",data:{labels:CANCEL_TITLES,datasets:[{label:"Tasa %",data:CANCEL_RATES,backgroundColor:RED+"bb",borderColor:RED,borderWidth:1}]},options:{...baseOpts,indexAxis:"y",plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.raw.toFixed(1)+"%"}}},scales:{x:{ticks:{color:MUTED,callback:v=>v+"%"},grid:{color:gridColor}},y:{ticks:{color:MUTED,font:{size:10}},grid:{color:gridColor}}}}});
+}
+function buildAds(){
+  const cd=document.getElementById("c-costs-donut");
+  if(cd&&typeof COSTS_DATA!=="undefined"&&COSTS_DATA.length){
+    new Chart(cd,{type:"doughnut",data:{labels:COSTS_DATA.map(x=>x[0]),datasets:[{data:COSTS_DATA.map(x=>x[1]),backgroundColor:[BLUE,PURPLE,GREEN,RED,"#FF9500","#00d4e4","#888"]}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"bottom",labels:{color:"#e0e0e0",font:{size:10}}},tooltip:{callbacks:{label:ctx=>ctx.label+": "+fmtM(ctx.raw)}}}}});
+  }
+}
+window.addEventListener("DOMContentLoaded",()=>{ built.add("resumen"); setTimeout(()=>buildC("resumen"),100); });
+</script>
+</body>
+</html>

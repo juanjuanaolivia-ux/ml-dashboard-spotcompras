@@ -1,0 +1,18 @@
+{
+  "level_id": "5_green",
+  "power_seller_status": "platinum",
+  "sales_60d": 10717,
+  "claims_rate": 0.001,
+  "claims_value": 12,
+  "delayed_rate": 0.0156,
+  "delayed_value": 168,
+  "cancellations_rate": 0.0001,
+  "cancellations_value": 2,
+  "completed": 77347,
+  "canceled": 4927,
+  "total": 82274,
+  "ratings_positive": 0.85,
+  "ratings_negative": 0.11,
+  "nickname": "SPOTCOMPRAS",
+  "fetched_at": "2026-05-16T13:49:55.793174"
+}

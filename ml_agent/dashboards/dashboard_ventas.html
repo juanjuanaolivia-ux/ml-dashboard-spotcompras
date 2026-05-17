@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ventas y Facturación</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --ml-yellow: #ffe600;
+      --ml-blue:   #3483fa;
+      --ml-green:  #00a650;
+      --ml-red:    #f23d4f;
+      --ml-dark:   #1a1a2e;
+      --bg:        #f5f5f5;
+      --card:      #ffffff;
+      --text:      #333333;
+      --muted:     #888888;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg); color: var(--text); }
+    .topbar { background: var(--ml-dark); color: var(--ml-yellow);
+               padding: 14px 24px; display: flex; align-items: center; gap: 12px; }
+    .topbar h1 { font-size: 1.2rem; font-weight: 700; }
+    .topbar .updated { margin-left: auto; font-size: 0.75rem; color: #aaa; }
+    .nav { background: #fff; border-bottom: 2px solid var(--ml-yellow);
+            padding: 0 24px; display: flex; gap: 4px; }
+    .nav a { padding: 10px 18px; text-decoration: none; color: var(--muted);
+              font-size: 0.85rem; font-weight: 600; border-bottom: 3px solid transparent;
+              transition: all .2s; }
+    .nav a:hover, .nav a.active { color: var(--ml-blue); border-bottom-color: var(--ml-blue); }
+    .content { padding: 24px; max-width: 1400px; margin: 0 auto; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+                 gap: 16px; margin-bottom: 24px; }
+    .kpi { background: var(--card); border-radius: 10px; padding: 18px;
+            box-shadow: 0 2px 8px rgba(0,0,0,.06); border-left: 4px solid var(--ml-blue); }
+    .kpi.green  { border-left-color: var(--ml-green); }
+    .kpi.yellow { border-left-color: var(--ml-yellow); }
+    .kpi.red    { border-left-color: var(--ml-red); }
+    .kpi-label  { font-size: 0.72rem; text-transform: uppercase; color: var(--muted);
+                   letter-spacing: .5px; margin-bottom: 6px; }
+    .kpi-value  { font-size: 1.6rem; font-weight: 800; color: var(--text); }
+    .kpi-sub    { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
+    .charts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+                    gap: 20px; margin-bottom: 24px; }
+    .chart-card { background: var(--card); border-radius: 10px; padding: 20px;
+                   box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+    .chart-card h3 { font-size: 0.85rem; color: var(--muted); text-transform: uppercase;
+                      letter-spacing: .5px; margin-bottom: 14px; }
+    .table-card { background: var(--card); border-radius: 10px; padding: 20px;
+                   box-shadow: 0 2px 8px rgba(0,0,0,.06); margin-bottom: 20px;
+                   overflow-x: auto; }
+    .table-card h3 { font-size: 0.9rem; font-weight: 700; margin-bottom: 14px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+    th { background: #f0f4ff; color: var(--ml-blue); padding: 10px 12px;
+          text-align: left; font-weight: 700; white-space: nowrap; }
+    td { padding: 9px 12px; border-bottom: 1px solid #f0f0f0; }
+    tr:hover td { background: #fafcff; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 20px;
+              font-size: 0.72rem; font-weight: 700; }
+    .badge-green  { background: #e6f9ee; color: var(--ml-green); }
+    .badge-red    { background: #fdeaec; color: var(--ml-red); }
+    .badge-yellow { background: #fffbe6; color: #c47d00; }
+    .badge-blue   { background: #e8f1ff; color: var(--ml-blue); }
+    .section-title { font-size: 1rem; font-weight: 700; margin: 24px 0 12px;
+                      color: var(--ml-dark); border-left: 4px solid var(--ml-yellow);
+                      padding-left: 10px; }
+  </style>
+</head>
+<body>
+<div class="topbar">
+  <span>🛒</span>
+  <h1>ML Analytics — Ventas y Facturación</h1>
+  <span class="updated">Actualizado: 2026-05-16 01:12:35</span>
+</div>
+<div class="nav">
+  <a href="dashboard_ventas.html">📊 Ventas</a>
+  <a href="dashboard_stock.html">📦 Stock</a>
+  <a href="dashboard_comisiones.html">💰 Comisiones</a>
+  <a href="dashboard_reclamos.html">⚠️ Reclamos</a>
+</div>
+<div class="content">
+
+<div class="kpi-grid">
+  <div class="kpi">        <div class="kpi-label">GMV Total</div>
+    <div class="kpi-value">$455.834.440</div>
+    <div class="kpi-sub">6.581 órdenes pagas</div></div>
+  <div class="kpi green">  <div class="kpi-label">Unidades Vendidas</div>
+    <div class="kpi-value">6.932</div>
+    <div class="kpi-sub">Últimos 30 días</div></div>
+  <div class="kpi yellow"> <div class="kpi-label">Ticket Promedio</div>
+    <div class="kpi-value">$69.265</div>
+    <div class="kpi-sub">Por orden paga</div></div>
+  <div class="kpi red">    <div class="kpi-label">Tasa Cancelación</div>
+    <div class="kpi-value">5.4%</div>
+    <div class="kpi-sub">375 canceladas de 6962 totales</div></div>
+  <div class="kpi">        <div class="kpi-label">Órdenes Totales</div>
+    <div class="kpi-value">6.962</div>
+    <div class="kpi-sub">Todos los estados</div></div>
+</div>
+
+<div class="charts-grid">
+  <div class="chart-card">
+    <h3>GMV Diario</h3>
+    <canvas id="chartGMV"></canvas>
+  </div>
+  <div class="chart-card">
+    <h3>Unidades Vendidas Diarias</h3>
+    <canvas id="chartUnits"></canvas>
+  </div>
+  <div class="chart-card">
+    <h3>Estado de Órdenes</h3>
+    <canvas id="chartStatus"></canvas>
+  </div>
+  <div class="chart-card">
+    <h3>Top 10 Ítems por GMV</h3>
+    <canvas id="chartTopItems"></canvas>
+  </div>
+</div>
+<div class="section-title">Top Ítems por Facturación</div>
+<div class="table-card">
+  <table>
+    <tr><th>#</th><th>Item ID</th><th>Título</th><th>GMV</th><th>Unidades</th><th>Precio Prom</th></tr>
+    <tr><td>1</td><td>MLA2861249332</td><td>Batidora Planetaria 3 En 1 Tivoli 5 Litr</td><td><b>$27.997.365</b></td><td>201</td><td>$139.290</td></tr>
+    <tr><td>2</td><td>MLA2300699478</td><td>Freidora De Aire Digital Tivoli 6,2 Litr</td><td><b>$24.833.669</b></td><td>351</td><td>$70.751</td></tr>
+    <tr><td>3</td><td>MLA2077361436</td><td>Batidora De Pie Planetaria Digital 3 En </td><td><b>$21.557.541</b></td><td>131</td><td>$164.561</td></tr>
+    <tr><td>4</td><td>MLA2050307374</td><td>Fabrica De Mini Donas Tivoli Donuts Make</td><td><b>$18.971.522</b></td><td>586</td><td>$32.375</td></tr>
+    <tr><td>5</td><td>MLA3006240464</td><td>Máquina De Coser Tivoli 16 Estilos De Pu</td><td><b>$14.561.231</b></td><td>149</td><td>$97.726</td></tr>
+    <tr><td>6</td><td>MLA2077390262</td><td>Batidora De Pie Planetaria Digital 3 En </td><td><b>$13.871.680</b></td><td>80</td><td>$173.396</td></tr>
+    <tr><td>7</td><td>MLA1487624365</td><td>Microondas Tivoli 5 Niveles De Cocción T</td><td><b>$13.329.801</b></td><td>99</td><td>$134.644</td></tr>
+    <tr><td>8</td><td>MLA2050381862</td><td>Fabrica De Mini Donas Tivoli Donuts Make</td><td><b>$12.412.159</b></td><td>311</td><td>$39.910</td></tr>
+    <tr><td>9</td><td>MLA1719495992</td><td>Silla Gamer Ergonómica Constrictor Lampa</td><td><b>$12.019.423</b></td><td>67</td><td>$179.394</td></tr>
+    <tr><td>10</td><td>MLA1811065524</td><td>Mini Compresor Portátil Cycplus As2 100p</td><td><b>$11.945.039</b></td><td>165</td><td>$72.394</td></tr>
+  </table>
+</div>
+
+<script>
+const opts = { responsive: true, plugins: { legend: { display: false } } };
+new Chart(document.getElementById('chartGMV'), {
+  type: 'bar', data: {
+    labels: ["2026-04-16", "2026-04-17", "2026-04-18", "2026-04-19", "2026-04-20", "2026-04-21", "2026-04-22", "2026-04-23", "2026-04-24", "2026-04-25", "2026-04-26", "2026-04-27", "2026-04-28", "2026-04-29", "2026-04-30", "2026-05-01", "2026-05-02", "2026-05-03", "2026-05-04", "2026-05-05", "2026-05-06", "2026-05-07", "2026-05-08", "2026-05-09", "2026-05-10", "2026-05-11", "2026-05-12", "2026-05-13", "2026-05-14", "2026-05-15"],
+    datasets: [{ data: [10079301.02, 7404595.04, 5962509.07, 9190381.8, 10524448.11, 9405217.3, 11278523.84, 11154675.29, 8666876.47, 8036481.66, 9688115.16, 10384479.61, 10844271.05, 12403693.73, 8624164.55, 8050734.38, 7077015.97, 9761233.95, 13478041.4, 23440205.24, 19279459.65, 19734766.58, 12177491.55, 10086049.0, 11505345.0, 51268150.03, 43576274.05, 49733046.44, 18103069.4, 13585067.42], backgroundColor: '#3483fa88', borderColor: '#3483fa', borderWidth: 1 }]
+  }, options: opts
+});
+new Chart(document.getElementById('chartUnits'), {
+  type: 'line', data: {
+    labels: ["2026-04-16", "2026-04-17", "2026-04-18", "2026-04-19", "2026-04-20", "2026-04-21", "2026-04-22", "2026-04-23", "2026-04-24", "2026-04-25", "2026-04-26", "2026-04-27", "2026-04-28", "2026-04-29", "2026-04-30", "2026-05-01", "2026-05-02", "2026-05-03", "2026-05-04", "2026-05-05", "2026-05-06", "2026-05-07", "2026-05-08", "2026-05-09", "2026-05-10", "2026-05-11", "2026-05-12", "2026-05-13", "2026-05-14", "2026-05-15"],
+    datasets: [{ data: [167, 141, 89, 139, 165, 149, 172, 205, 146, 116, 157, 197, 168, 172, 129, 114, 118, 152, 227, 310, 272, 284, 202, 160, 169, 750, 668, 699, 281, 186], borderColor: '#00a650', tension: 0.4, fill: true, backgroundColor: '#00a65022' }]
+  }, options: opts
+});
+new Chart(document.getElementById('chartStatus'), {
+  type: 'doughnut', data: {
+    labels: ["paid", "cancelled", "partially_refunded"],
+    datasets: [{ data: [6581, 375, 6], backgroundColor: ['#00a650','#3483fa','#f23d4f','#ffe600','#888'] }]
+  }, options: { responsive: true }
+});
+new Chart(document.getElementById('chartTopItems'), {
+  type: 'horizontalBar', // compat
+  type: 'bar',
+  indexAxis: 'y',
+  data: {
+    labels: ["Batidora Planetaria 3 En 1 Tivoli 5 Litr", "Freidora De Aire Digital Tivoli 6,2 Litr", "Batidora De Pie Planetaria Digital 3 En ", "Fabrica De Mini Donas Tivoli Donuts Make", "M\u00e1quina De Coser Tivoli 16 Estilos De Pu", "Batidora De Pie Planetaria Digital 3 En ", "Microondas Tivoli 5 Niveles De Cocci\u00f3n T", "Fabrica De Mini Donas Tivoli Donuts Make", "Silla Gamer Ergon\u00f3mica Constrictor Lampa", "Mini Compresor Port\u00e1til Cycplus As2 100p"],
+    datasets: [{ data: [27997365, 24833669, 21557541, 18971522.13, 14561231, 13871679.5, 13329801, 12412159, 12019423.11, 11945038.88], backgroundColor: '#3483fa88', borderColor: '#3483fa', borderWidth: 1 }]
+  }, options: opts
+});
+</script>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,32 @@
+# Credenciales — NUNCA subir al repo
+ml_agent/data/token.json
+ml_agent/ml_email_config.json
+
+# Cache Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Logs
+*.log
+email_log.txt
+
+# Archivos temporales Excel
+~$*.xlsx
+~$*.xls
+
+# Entornos virtuales
+venv/
+.venv/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
