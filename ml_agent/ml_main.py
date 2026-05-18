@@ -50,7 +50,6 @@ def fetch_and_compute():
     cur_from = date(cur_year, cur_month, 1)
     cur_to   = today
     pri_from = date(pri_year, pri_month, 1)
-    # Comparar mismo período: si hoy es día 16, compara 1-16 del mes anterior
     pri_day  = min(today.day, calendar.monthrange(pri_year, pri_month)[1])
     pri_to   = date(pri_year, pri_month, pri_day)
 
@@ -92,7 +91,6 @@ def fetch_and_compute():
     _save('enrich_prior',   ep)
     _save('cat_names',      cat_names)
 
-
     # Evolutivo 2026
     existing_monthly = _load('monthly_2026') or []
     fetch_monthly_evolution_2026(session, existing=existing_monthly)
@@ -132,36 +130,49 @@ def fetch_and_compute():
     return summary
 
 
-def _git_push_dashboard(dashboard_path):
+def _push_dashboard_to_railway(dashboard_path):
     """
-    Hace commit + push del HTML generado a GitHub.
-    Railway detecta el nuevo commit y auto-despliega.
-    Requiere que el repo ya esté inicializado (ver instrucciones de setup).
+    Envía el HTML generado directamente a Railway vía HTTP POST.
+    Sin git, sin credenciales de GitHub.
+    Lee de ml_email_config.json:
+        railway_url:        https://spotcompras.up.railway.app
+        railway_update_key: clave secreta (DASHBOARD_UPDATE_KEY en Railway)
     """
-    import subprocess
-    # El repo está un nivel arriba de ml_agent/
-    repo_root = os.path.dirname(SCRIPT_DIR)
-    git_cfg   = os.path.join(repo_root, '.git')
-    if not os.path.isdir(git_cfg):
-        # Git no inicializado — salteamos silenciosamente
+    import urllib.request, urllib.error
+
+    cfg_path = os.path.join(SCRIPT_DIR, 'ml_email_config.json')
+    if not os.path.exists(cfg_path):
+        return
+    with open(cfg_path, encoding='utf-8') as f:
+        cfg = json.load(f)
+
+    url = cfg.get('railway_url', '').rstrip('/')
+    key = cfg.get('railway_update_key', '')
+    if not url or not key:
+        print("  [railway] railway_url / railway_update_key no configurados — skip")
         return
 
-    today = datetime.now().strftime('%Y-%m-%d %H:%M')
-    # Ruta relativa al dashboard desde la raíz del repo
-    rel_path = os.path.relpath(dashboard_path, repo_root)
+    endpoint = f"{url}/update"
+    with open(dashboard_path, 'rb') as f:
+        html_bytes = f.read()
 
-    cmds = [
-        ['git', '-C', repo_root, 'add', rel_path],
-        ['git', '-C', repo_root, 'commit', '-m', f'Dashboard update {today}', '--allow-empty'],
-        ['git', '-C', repo_root, 'push'],
-    ]
-    for cmd in cmds:
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.returncode != 0 and 'nothing to commit' not in result.stdout:
-            print(f"  [git] {' '.join(cmd[3:])}: {result.stderr.strip() or result.stdout.strip()}")
-        else:
-            if 'push' in cmd:
-                print("  GitHub: dashboard actualizado y subido OK")
+    req = urllib.request.Request(
+        endpoint,
+        data=html_bytes,
+        headers={
+            'X-Update-Key': key,
+            'Content-Type': 'text/html; charset=utf-8',
+        },
+        method='POST',
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            body = resp.read().decode()
+            print(f"  [railway] Dashboard subido a Railway OK | {body}")
+    except urllib.error.HTTPError as e:
+        print(f"  [railway] Error HTTP {e.code}: {e.read().decode()[:200]}")
+    except Exception as e:
+        print(f"  [railway] Error al subir dashboard: {e}")
 
 
 def main():
@@ -205,8 +216,8 @@ def main():
         elif send_mail:
             print("  Configura ml_email_config.json con tus credenciales reales de Gmail.")
 
-    # Auto-push a GitHub (actualiza el dashboard online en Railway)
-    _git_push_dashboard(out)
+    # Push directo a Railway (sin git)
+    _push_dashboard_to_railway(out)
 
 
 if __name__ == '__main__':
