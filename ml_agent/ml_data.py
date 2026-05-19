@@ -577,10 +577,13 @@ def enrich_metrics(orders: list, items: list) -> dict:
 
     by_cat  = defaultdict(lambda: {"gmv": 0, "units": 0, "name": ""})
     by_lt   = defaultdict(lambda: {"gmv": 0, "units": 0})
-    by_log  = defaultdict(lambda: {"gmv": 0, "units": 0})
-    by_hour = defaultdict(float)
-    hm      = [[0.0] * 24 for _ in range(7)]
-    du      = defaultdict(int)
+    by_log     = defaultdict(lambda: {"gmv": 0, "units": 0})
+    by_hour    = defaultdict(float)
+    hm         = [[0.0] * 24 for _ in range(7)]
+    du         = defaultdict(int)
+    # Per-day breakdown for listing_type and logistic (enables range filtering in dashboard)
+    daily_lt   = defaultdict(lambda: defaultdict(float))   # {day: {label: gmv}}
+    daily_log  = defaultdict(lambda: defaultdict(float))   # {day: {label: gmv}}
 
     for o in paid:
         ds = o.get("date_created", "") or ""
@@ -594,23 +597,24 @@ def enrich_metrics(orders: list, items: list) -> dict:
         except Exception:
             h, dw = 0, 0
 
+        day = 0
+        try:
+            day = int(ds[:10].split("-")[2])
+        except Exception:
+            pass
+
         for i in o.get("items", []):
             iid   = i.get("item_id") or "?"
             gmv   = (i.get("unit_price") or 0) * (i.get("quantity") or 0)
             units = i.get("quantity") or 0
             cat     = i.get("category") or item_map.get(iid, {}).get("category_id", "?")
             lt_raw  = item_map.get(iid, {}).get("listing_type_id") or i.get("listing_type") or "unknown"
-            lt      = {"gold_special": "Clásica", "gold_pro": "Premium"}.get(lt_raw, lt_raw)
-            log_raw = item_map.get(iid, {}).get("logistic_type", "unknown")
+            lt      = {"gold_special": "Clásica", "gold_pro": "Premium",
+                       "gold_premium": "Premium"}.get(lt_raw, "Sin clasificar" if lt_raw == "unknown" else lt_raw)
+            log_raw = item_map.get(iid, {}).get("logistic_type") or "unknown"
             log     = {"fulfillment": "Full", "cross_docking": "Flex",
                        "self_service": "Colecta", "default_buying_flow": "Colecta",
-                       "drop_off": "Colecta"}.get(log_raw, log_raw)
-
-            day = 0
-            try:
-                day = int(ds[:10].split("-")[2])
-            except Exception:
-                pass
+                       "drop_off": "Colecta"}.get(log_raw, "Colecta" if log_raw == "unknown" else log_raw)
 
             by_cat[cat]["gmv"]   += gmv
             by_cat[cat]["units"] += units
@@ -619,6 +623,15 @@ def enrich_metrics(orders: list, items: list) -> dict:
             by_log[log]["gmv"]   += gmv
             by_log[log]["units"] += units
             du[day]              += units
+            if day:
+                daily_lt[day][lt]  += gmv
+                daily_log[day][log] += gmv
+
+    # Serialize daily_lt and daily_log as {day_str: {label: gmv_int}}
+    daily_lt_out  = {str(d): {lbl: round(v) for lbl, v in lmap.items()}
+                     for d, lmap in sorted(daily_lt.items())}
+    daily_log_out = {str(d): {lbl: round(v) for lbl, v in lmap.items()}
+                     for d, lmap in sorted(daily_log.items())}
 
     return {
         "by_category":     {k: {"gmv": round(v["gmv"]), "units": v["units"], "name": v["name"]}
@@ -630,6 +643,8 @@ def enrich_metrics(orders: list, items: list) -> dict:
         "by_hour":         {str(k): round(v) for k, v in sorted(by_hour.items())},
         "heatmap":         [[round(hm[d][h]) for h in range(24)] for d in range(7)],
         "daily_units":     {str(k): v for k, v in sorted(du.items())},
+        "daily_lt":        daily_lt_out,
+        "daily_log":       daily_log_out,
     }
 
 
