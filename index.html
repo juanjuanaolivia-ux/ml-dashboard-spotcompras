@@ -1032,6 +1032,7 @@ function renderAds(dayFrom,dayTo){
 function renderAnual(){
   var c=cc();
   // Excluir Dic 25 del gráfico
+  var MON26=MONTHLY.filter(function(m){return !(m.year===2025&&m.month===12);});
   var lbl=MON26.map(function(m){return m.label||"";})
   var gmvs=MON26.map(function(m){return m.gmv||0;});
   var tkts=MON26.map(function(m){return m.avg_ticket||0;});
