@@ -829,7 +829,7 @@ function renderCancelSku(dayFrom,dayTo){
     var riesgo=x.rate>10?'🔴 Alto':(x.rate>5?'🟡 Medio':'🟢 OK');
     return '<tr>'
       +'<td style="color:var(--text3)">'+(i+1)+'</td>'
-      +'<td style="font-weight:700;color:var(--cyan);font-size:12px">'+ x.id+'</td>'
+      +'<td style="font-weight:700;color:var(--cyan);font-size:12px">'+ x.sku+'</td>'
       +'<td style="color:var(--text2);font-size:11px">'+ x.cat+'</td>'
       +'<td style="color:var(--red);font-weight:700">'+ fmtN(x.c)+'</td>'
       +'<td>'+fmtN(x.p)+'</td>'
