@@ -178,7 +178,9 @@ def build_dashboard():
     ep    = load_json('enrich_prior.json') or {}
     sm    = load_json('summary.json') or {}
     rep   = load_json('reputation.json') or {}
-    ads   = load_json('ads_manual.json') or {}
+    ads        = load_json('ads_manual.json') or {}
+    ads_daily_f= load_json('ads_daily.json') or {}
+    ads_d      = ads_daily_f.get('daily', {})
     costs = load_json('costs_manual.json') or {}
     mon   = load_json('monthly_2026.json') or []
     stk   = load_json('stock_status.json') or []
@@ -478,7 +480,7 @@ def build_dashboard():
                         for d, cmap in sorted(_daily_by_cat_pri.items())}
 
     # ── Daily hour breakdown (for Horarios range filter) ─────────────────────
-    _daily_hour = {}   # day → hour → gmv
+    _daily_hour = {}   # day → hour → {gmv, units}
     for _o in orders_cur:
         _ds  = _o.get('date_closed') or _o.get('date_created') or ''
         _st  = _o.get('status', '')
@@ -486,21 +488,19 @@ def build_dashboard():
         try:
             _day  = int(_ds[8:10])
             _hraw = int(_ds[11:13])
-            _tz   = _ds[19:]  # e.g. "-04:00"
-            _off  = 0
-            if len(_tz) >= 6:
-                _sign = 1 if _tz[0] == '+' else -1
-                _off  = _sign * (int(_tz[1:3]) * 60 + int(_tz[4:6]))
-            _hour = (_hraw * 60 + _off) // 60 % 24  # convert to UTC-0 local? keep local
-            _hour = _hraw  # keep server hour, easier for user
+            _hour = _hraw  # keep server hour
         except Exception:
             continue
         if not _day: continue
         if _day not in _daily_hour: _daily_hour[_day] = {}
-        if _hour not in _daily_hour[_day]: _daily_hour[_day][_hour] = 0.0
+        if _hour not in _daily_hour[_day]: _daily_hour[_day][_hour] = {'gmv': 0.0, 'units': 0}
         for _it in _o.get('items', []):
-            _daily_hour[_day][_hour] += (_it.get('quantity', 0) or 0) * float(_it.get('unit_price', 0) or 0)
-    daily_hour = {str(d): {str(h): round(v) for h, v in hmap.items()}
+            _qty   = _it.get('quantity', 0) or 0
+            _price = float(_it.get('unit_price', 0) or 0)
+            _daily_hour[_day][_hour]['gmv']   += _qty * _price
+            _daily_hour[_day][_hour]['units'] += _qty
+    daily_hour = {str(d): {str(h): {'gmv': round(v['gmv']), 'units': v['units']}
+                            for h, v in hmap.items()}
                   for d, hmap in sorted(_daily_hour.items())}
 
     # ── Daily SKU breakdown (for Stock + TopItems range filter) ───────────────
@@ -526,6 +526,28 @@ def build_dashboard():
     daily_sku = {str(d): {s: {'gmv': round(v['gmv']), 'units': v['units']}
                            for s, v in smap.items()}
                  for d, smap in sorted(_daily_sku.items())}
+
+    # ── Daily SKU cancelaciones (para tabla dinámica con filtro de fecha) ─────
+    _daily_sku_canc = {}   # day → sku → {c: canc_qty, p: paid_qty}
+    for _o in orders_cur:
+        _ds  = _o.get('date_closed') or _o.get('date_created') or ''
+        _st  = _o.get('status', '')
+        try:
+            _day = int(_ds[8:10])
+        except Exception:
+            _day = 0
+        if not _day: continue
+        for _it in _o.get('items', []):
+            _iid   = _it.get('item_id', '')
+            _title = _it.get('title', '')
+            _qty   = _it.get('quantity', 0) or 0
+            _sk, _ = _get_sku(_iid, _title)
+            if _day not in _daily_sku_canc: _daily_sku_canc[_day] = {}
+            if _sk not in _daily_sku_canc[_day]: _daily_sku_canc[_day][_sk] = {'c': 0, 'p': 0}
+            if _st == 'cancelled': _daily_sku_canc[_day][_sk]['c'] += _qty
+            else:                  _daily_sku_canc[_day][_sk]['p'] += _qty
+    daily_sku_canc = {str(d): {s: v for s, v in smap.items()}
+                      for d, smap in sorted(_daily_sku_canc.items())}
 
     # ── Day-of-week mapping for current month ──────────────────────────────────
     from datetime import date as _date
@@ -788,6 +810,11 @@ tr:hover td{background:var(--surface2)}
         w(f'const DAILY_BY_CAT_PRI={jd(daily_by_cat_pri)};')
         w(f'const DAILY_HOUR={jd(daily_hour)};')
         w(f'const DAILY_SKU={jd(daily_sku)};')
+        w(f'const DAILY_SKU_CANC={jd(daily_sku_canc)};')
+        # SKU_CANC_META: sku → {t: title_short, c: categoria} para la tabla JS
+        _sku_canc_meta = {v['sku']: {'t': (v.get('title') or v['sku'])[:35], 'c': v.get('categoria','')}
+                          for v in _sku_canc.values() if v.get('sku')}
+        w(f'const SKU_CANC_META={jd(_sku_canc_meta)};')
         w(f'const DAY_TO_DOW={jd(day_to_dow)};')
         w(f'const LT_CUR={jd(lt_cur)};')
         w(f'const LT_PRI={jd(lt_pri)};')
@@ -796,6 +823,9 @@ tr:hover td{background:var(--surface2)}
         w(f'const DAILY_LT={jd(daily_lt)};')
         w(f'const DAILY_LOG={jd(daily_log)};')
         w(f'const MONTHLY={jd(mon)};')
+        w(f'const ADS_DAILY={jd(ads_d)};')
+        w(f'const ADS_YEAR={today.year};')
+        w(f'const ADS_MONTH={today.month};')
         w(f'const ML_ITEMS_DATA={jd(ml_items_list)};')
         w(f'const TOP_ITEMS={jd(sku_top_items)};')
         w(f'const TOP_ITEMS_PRI={jd(sku_top_pri)};')
@@ -885,20 +915,20 @@ tr:hover td{background:var(--surface2)}
         w('<div id="stock-summary" class="kpi-grid"></div>')
         w('<div class="slider-row">')
         w('<label>Categoría:</label>')
-        w('<select id="stk-cat-filter" onchange="renderStock()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px">')
+        w('<select id="stk-cat-filter" onchange="(function(){var r=_rng();renderStock(r[0],r[1]);})()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px">')
         w('<option value="">Todas</option>')
         for c in cats_ml:
             w(f'<option value="{c}">{c}</option>')
         w('</select>')
         w('<label style="margin-left:8px">Cobertura:</label>')
-        w('<select id="stk-show-filter" onchange="renderStock()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px">')
+        w('<select id="stk-show-filter" onchange="(function(){var r=_rng();renderStock(r[0],r[1]);})()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px">')
         w('<option value="all">Todos</option><option value="zero">Sin stock</option>')
         w('<option value="low">Bajo (&lt;10)</option><option value="critical">&lt;7 días</option>')
         w('</select></div>')
         w('<div class="card"><div class="card-title">SKU · ventas período · stock · cobertura</div>')
         w('<div class="card-body tbl-scroll">')
         w('<table><thead><tr><th>SKU</th><th>Descripción</th><th>Categoría</th>')
-        w('<th>Vtas</th><th>GMV</th><th>Stock ML</th><th>Cobertura</th><th>Dep.</th><th>Full</th><th>Aduana</th></tr></thead>')
+        w('<th>Vtas</th><th>GMV</th><th>Cobertura</th><th>Dep.</th><th>Full</th><th>Aduana</th></tr></thead>')
         w('<tbody id="stock-tbody"></tbody></table></div></div></div>')
 
         # ── TAB 4: CANCELACIONES ─────────────────────────────────────────────
@@ -930,19 +960,9 @@ tr:hover td{background:var(--surface2)}
         w('</div></div>')
         w('<div class="card"><div class="card-title">SKUs con más cancelaciones</div>')
         w('<div class="card-body tbl-scroll"><table><thead><tr>')
-        w('<th>#</th><th>SKU</th><th>Categoría</th><th>Canceladas</th><th>Pagadas</th><th>Tasa</th><th>Riesgo</th></tr></thead><tbody>')
-        for i, cx in enumerate(sku_cancels[:25], 1):
-            rate   = cx.get('rate', 0)
-            col    = 'bad' if rate > 10 else ('neutral' if rate > 5 else 'good')
-            riesgo = '🔴 Alto' if rate > 10 else ('🟡 Medio' if rate > 5 else '🟢 OK')
-            s_key  = cx.get('sku','')
-            disp   = s_key if (not s_key.isdigit() and len(s_key) < 20) else cx.get('title','')[:28]
-            w(f'<tr><td style="color:var(--text3)">{i}</td>'
-              f'<td style="font-weight:700;color:var(--cyan);font-size:12px">{disp}</td>'
-              f'<td style="color:var(--text2);font-size:11px">{cx.get("categoria","")}</td>'
-              f'<td style="color:var(--red);font-weight:700">{cx.get("c",0)}</td>'
-              f'<td>{cx.get("p",0)}</td><td class="{col}">{rate:.1f}%</td><td>{riesgo}</td></tr>')
-        w('</tbody></table></div></div></div>')
+        w('<th>#</th><th>SKU</th><th>Categoría</th><th>Canceladas</th><th>Pagadas</th><th>Tasa</th><th>Riesgo</th></tr></thead>')
+        w('<tbody id="canc-sku-tbody"><tr><td colspan="7" style="color:var(--text3);text-align:center;padding:16px">Cargando...</td></tr></tbody>')
+        w('</table></div></div></div>')
 
         # ── TAB 5: REPUTACIÓN ────────────────────────────────────────────────
         claims_pct  = (rep.get('claims_rate', 0) or 0) * 100
@@ -969,7 +989,9 @@ tr:hover td{background:var(--surface2)}
         ]:
             w(f'<div class="kpi"><div class="kpi-label">{lbl}</div><div class="kpi-val" style="color:{col}">{val}</div></div>')
         w('</div>')
-        w('<div class="card"><div class="card-title">Métricas de calidad · últimos 60 días</div><div class="card-body">')
+        w('<div class="card" style="border-left:3px solid var(--blue)"><div class="card-title">📅 Métricas del período seleccionado</div>')
+        w('<div class="card-body"><div class="kpi-grid" id="rep-period-kpis"></div></div></div>')
+        w('<div class="card"><div class="card-title">Métricas de calidad · últimos 60 días · API ML</div><div class="card-body">')
         for lbl, val, warn_t, bad_t in [
             ('Reclamos',      claims_pct,  1.0, 2.0),
             ('Envíos tardíos',delayed_pct, 6.0, 10.0),
@@ -995,69 +1017,20 @@ tr:hover td{background:var(--surface2)}
         w('<div class="card-body" style="font-size:12px;line-height:2">')
         for msg in issues: w(f'<div>{msg}</div>')
         w('</div></div>')
-        w('<div class="card"><div class="card-title">SKUs con mayor riesgo reputacional</div>')
-        w('<div class="card-body tbl-scroll"><table><thead><tr><th>SKU</th><th>Categoría</th><th>Tasa cancel.</th><th>Canceladas</th><th>Riesgo</th></tr></thead><tbody>')
-        for cx in sorted(sku_cancels[:15], key=lambda x: -x.get('rate',0))[:10]:
-            rate  = cx.get('rate',0)
-            col2  = 'var(--red)' if rate > 10 else ('var(--yellow)' if rate > 5 else 'var(--green)')
-            risk  = '🔴 Alto' if rate > 10 else ('🟡 Monitorear' if rate > 5 else '🟢 Estable')
-            s_key = cx.get('sku','')
-            disp  = s_key if (not s_key.isdigit() and len(s_key) < 20) else cx.get('title','')[:28]
-            w(f'<tr><td style="font-weight:700;color:var(--cyan)">{disp}</td>'
-              f'<td style="color:var(--text2);font-size:11px">{cx.get("categoria","")}</td>'
-              f'<td style="color:{col2};font-weight:700">{rate:.1f}%</td>'
-              f'<td style="color:var(--red)">{cx.get("c",0)}</td><td style="color:{col2}">{risk}</td></tr>')
-        w('</tbody></table></div></div>')
         w('</div>')
 
         # ── TAB 6: ADS ───────────────────────────────────────────────────────
         ads_per = ads.get('periodo','') or ads.get('fecha','') or period_cur
         w('<div id="tab6" class="tab">')
-        w(f'<div class="header"><h1>⚡ Ads & Costos</h1><div class="meta">Período: {ads_per}</div></div>')
-        w('<div class="card"><div class="card-title">KPIs Ads</div><div class="card-body"><div class="ads-grid">')
-        for lbl, val, col in [
-            ('Inversión',    fmt_money(a_inv),  'var(--purple)'),
-            ('Ingresos ads', fmt_money(a_rev),  'var(--green)'),
-            ('ROAS',         a_roas,             'var(--green)'),
-            ('TACOS',        a_tacos,            'var(--yellow)'),
-            ('CTR',          a_ctr,              'var(--blue)'),
-            ('CPC',          a_cpc,              'var(--cyan)'),
-            ('Conv. rate',   a_conv,             'var(--green)'),
-            ('Comisiones',   fmt_money(fees_c),  'var(--red)'),
-        ]:
-            w(f'<div class="ads-kpi"><div class="lbl">{lbl}</div><div class="val" style="color:{col}">{val}</div></div>')
-        w('</div></div></div>')
-        w('<div class="card"><div class="card-title">Tráfico</div><div class="card-body"><div class="ads-grid">')
-        for lbl, val, col in [
-            ('Impresiones', f'{int(a_impr):,}',   'var(--blue)'),
-            ('Clics',       f'{int(a_clics):,}',  'var(--cyan)'),
-            ('Ventas ads',  f'{int(a_ventas):,}', 'var(--green)'),
-            ('GMV total',   fmt_money(gmv_c),     'var(--text)'),
-        ]:
-            w(f'<div class="ads-kpi"><div class="lbl">{lbl}</div><div class="val" style="color:{col}">{val}</div></div>')
-        w('</div></div></div>')
-        w('<div class="card"><div class="card-title">Distribución de costos</div><div class="card-body">')
-        gmv_f   = float(gmv_c) or 1
-        c_comis = float(costs.get('comisiones') or fees_c)
-        c_env   = float(costs.get('envios') or 0)
-        c_ret   = float(costs.get('retenciones') or 0) + float(costs.get('percepciones') or 0)
-        neto_r  = max(0, float(gmv_c) - c_comis - a_inv - c_env - c_ret)
-        for lbl, val, col in [
-            ('Comisiones ML',  c_comis, 'var(--red)'),
-            ('Inversión Ads',  a_inv,   'var(--purple)'),
-            ('Envíos',         c_env,   'var(--cyan)'),
-            ('Ret. / Percep.', c_ret,   'var(--yellow)'),
-            ('Neto estimado',  neto_r,  'var(--green)'),
-        ]:
-            pct = val / gmv_f * 100
-            w(f'<div class="pct-row"><span class="pct-lbl">{lbl}</span>'
-              f'<div class="pct-track"><div class="pct-fill" style="width:{min(100,int(pct))}%;background:{col}"></div></div>'
-              f'<span class="pct-num" style="color:{col}">{fmt_money(val)} ({pct:.1f}%)</span></div>')
-        w('</div></div>')
-        if not a_inv:
-            w('<div class="card" style="border-left:3px solid var(--border)"><div class="card-body" style="color:var(--text3);font-size:13px">')
-            w('No hay datos de Ads disponibles para el período seleccionado.</div></div>')
+        w('<div class="header"><h1>⚡ Ads & Costos</h1><div class="meta" id="ads-meta">Cargando...</div></div>')
+        w('<div class="kpi-grid" id="ads-kpis"></div>')
+        w('<div class="card"><div class="card-title">Inversión vs Ingresos diarios</div>')
+        w('<div class="card-body"><div class="chart-wrap" style="height:240px"><canvas id="c-ads-daily"></canvas></div></div></div>')
+        w('<div class="card"><div class="card-title">ROAS diario</div>')
+        w('<div class="card-body"><div class="chart-wrap" style="height:180px"><canvas id="c-ads-roas"></canvas></div></div></div>')
+        w('<div class="card"><div class="card-title">Distribución de costos</div><div class="card-body" id="ads-costos"></div></div>')
         w('</div>')
+        w('')
 
         # ── TAB 7: TOP ITEMS ─────────────────────────────────────────────────
         w('<div id="tab7" class="tab">')
@@ -1065,26 +1038,33 @@ tr:hover td{background:var(--surface2)}
         w(f'<div class="meta">{period_cur} · {num_skus} SKUs únicos · fuente: orders_current.json</div></div>')
         w('<div class="slider-row">')
         w('<label>Ordenar por:</label>')
-        w('<select id="top-sort" onchange="renderTopItems()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px">')
+        w('<select id="top-sort" onchange="var fe=document.getElementById(\'day-from\'),te=document.getElementById(\'day-to\');renderTopItems(parseInt((fe||{}).value)||1,parseInt((te||{}).value)||MAX_DAY)" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px">')
         w('<option value="gmv">GMV</option><option value="units">Unidades</option></select>')
         w('<label style="margin-left:10px">Categoría:</label>')
-        w('<select id="top-cat-filter" onchange="renderTopItems()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px">')
+        w('<select id="top-cat-filter" onchange="var fe=document.getElementById(\'day-from\'),te=document.getElementById(\'day-to\');renderTopItems(parseInt((fe||{}).value)||1,parseInt((te||{}).value)||MAX_DAY)" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px">')
         w('<option value="">Todas</option>')
         for c in cats_ml:
             w(f'<option value="{c}">{c}</option>')
         w('</select></div>')
         w('<div class="kpi-grid" id="top-kpis"></div>')
         w('<div class="card"><div class="card-body tbl-scroll">')
+        w('<div style="font-size:11px;color:var(--text3);padding:6px 2px 10px">')
+        w('<span style="color:var(--green);font-weight:700;border:1px solid var(--green);border-radius:3px;padding:1px 5px;font-size:10px">OK</span>&nbsp; Mapeado vía archivo maestro &nbsp;&nbsp;')
+        w('<span style="color:var(--yellow);font-weight:700;border:1px solid var(--yellow);border-radius:3px;padding:1px 5px;font-size:10px">~</span>&nbsp; Mapeado por descripción (aproximado) &nbsp;&nbsp;')
+        w('<span style="color:var(--red);font-weight:700;border:1px solid var(--red);border-radius:3px;padding:1px 5px;font-size:10px">?</span>&nbsp; Sin SKU identificado')
+        w('</div>')
         w('<table><thead><tr><th>#</th><th>SKU</th><th>Categoría</th><th>GMV</th>')
         w('<th>% GMV</th><th>Unidades</th><th>% Units</th><th>vs Ant. GMV</th><th>vs Ant. Units</th></tr></thead>')
         w('<tbody id="top-tbody"></tbody></table></div></div></div>')
 
         # ── TAB 8: ANUAL ─────────────────────────────────────────────────────
         w('<div id="tab8" class="tab">')
-        total_gmv_y   = sum(m.get('gmv',0) for m in mon if m.get('complete'))
-        total_units_y = sum(m.get('units',0) for m in mon if m.get('complete'))
-        best_m     = max((m for m in mon if m.get('complete')), key=lambda m: m.get('gmv',0), default={})
-        months_done = sum(1 for m in mon if m.get('complete'))
+        # Excluir Dic 25 de KPIs y acumulado — solo se usa como referencia MoM
+        mon_kpi = [m for m in mon if not (m.get('year')==2025 and m.get('month')==12)]
+        total_gmv_y   = sum(m.get('gmv',0) for m in mon_kpi if m.get('complete'))
+        total_units_y = sum(m.get('units',0) for m in mon_kpi if m.get('complete'))
+        best_m     = max((m for m in mon_kpi if m.get('complete')), key=lambda m: m.get('gmv',0), default={})
+        months_done = sum(1 for m in mon_kpi if m.get('complete'))
         avg_monthly = total_gmv_y / months_done if months_done else 0
         cur_m       = next((m for m in mon if not m.get('complete')), None)
         # Inject current period GMV if monthly data doesn't include it
@@ -1119,6 +1099,9 @@ tr:hover td{background:var(--surface2)}
         w('<table><thead><tr><th>Mes</th><th>GMV</th><th>MoM</th><th>Unidades</th><th>Pagadas</th><th>Canceladas</th><th>Tasa Canc.</th><th>Ticket</th><th>Acumulado</th></tr></thead><tbody>')
         running_total = 0.0
         for mi, m in enumerate(mon):
+            # Dic 25 solo sirve como referencia MoM para Ene — no se muestra
+            if m.get('year')==2025 and m.get('month')==12:
+                continue
             gmv_m = m.get('gmv',0)
             running_total += gmv_m
             prev_g = mon[mi-1].get('gmv',0) if mi > 0 else 0
@@ -1143,8 +1126,7 @@ tr:hover td{background:var(--surface2)}
         w(".badge-share{display:inline-block;background:#3483FA20;color:var(--blue);border:1px solid #3483FA44;border-radius:10px;padding:1px 6px;font-size:11px;font-weight:700} .badge-sku{display:inline-block;background:#00d4e418;color:var(--cyan);border:1px solid #00d4e433;border-radius:10px;padding:1px 6px;font-size:11px} .cat-toggle{display:inline-block;width:16px;margin-right:4px;font-size:11px} .sku-row td{background:var(--surface2)!important;font-size:12px;border-bottom:1px solid var(--border)} .heatmap-tbl{border-collapse:collapse;font-size:10px;width:100%} .heatmap-tbl th{color:var(--text3);padding:2px 3px;text-align:center;font-weight:500} .heatmap-lbl{color:var(--text2);font-weight:700;padding:2px 6px;white-space:nowrap} .hm-cell{width:3.8%;text-align:center;padding:3px 1px;border-radius:3px;cursor:default;font-size:9px} .period-bar{display:flex;align-items:center;gap:0;background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:14px;box-shadow:var(--shadow);overflow:hidden;flex-wrap:wrap} .period-presets{display:flex;align-items:center;gap:6px;padding:10px 14px;flex-wrap:wrap} .period-divider{width:1px;min-height:40px;background:var(--border);flex-shrink:0} .period-custom{display:flex;align-items:center;gap:8px;padding:10px 14px} .period-custom-lbl{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;font-weight:600} .period-chip{height:30px;padding:0 13px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;line-height:28px;transition:all .15s ease;font-family:inherit} .period-chip:hover{border-color:var(--blue);color:var(--blue);background:#3483FA10} .period-chip.active{background:var(--blue);color:#fff;border-color:var(--blue);box-shadow:0 2px 8px #3483FA44} .period-chip.hot{border-color:#FF6B3566;color:var(--orange)} .period-chip.hot:hover{background:#FF6B3510} .period-chip.hot.active{background:var(--orange);color:#fff;border-color:var(--orange);box-shadow:0 2px 8px rgba(255,107,53,.35)} .period-input{width:46px;height:30px;padding:0 6px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);font-size:13px;font-weight:700;text-align:center;-moz-appearance:textfield;appearance:textfield;font-family:inherit} .period-input::-webkit-inner-spin-button,.period-input::-webkit-outer-spin-button{-webkit-appearance:none} .period-input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px #3483FA22} .period-sep{color:var(--text3);font-size:15px;font-weight:300;padding:0 2px} .period-info{font-size:12px;font-weight:700;color:var(--blue);background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:5px 11px;white-space:nowrap;min-width:90px;text-align:center}")
         w('</style>')
 
-        # Chart.js CDN
-        w('<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>')
+        # (Chart.js CDN already loaded in <head>)
 
         # Main JS block
         w('<script>')
@@ -1185,6 +1167,8 @@ tr:hover td{background:var(--surface2)}
         w("  if(n===3)renderStock(f,t);")
         w("  if(n===4)renderCancChart(f,t);")
         w("  if(n===7)renderTopItems(f,t);")
+        w("  if(n===5)renderReputacion(r[0],r[1]);")
+        w("  if(n===6)renderAds(f,t);")
         w("  if(n===8)renderAnual();")
         w("}")
         w("")
@@ -1238,6 +1222,8 @@ tr:hover td{background:var(--surface2)}
         w("  if(_activeTab===2)renderHorarios(f,t);")
         w("  if(_activeTab===3)renderStock(f,t);")
         w("  if(_activeTab===4)renderCancChart(f,t);")
+        w("  if(_activeTab===5)renderReputacion(f,t);")
+        w("  if(_activeTab===6)renderAds(f,t);")
         w("  if(_activeTab===7)renderTopItems(f,t);")
         w("}")
         w("function setRange(f,t){")
@@ -1403,62 +1389,99 @@ tr:hover td{background:var(--surface2)}
         w("function renderHorarios(dayFrom,dayTo){")
         w("  var f=dayFrom||1,t=dayTo||MAX_DAY;")
         w("  var c=cc();")
-        w("  var hourArr=Array(24).fill(0),hourCnt=Array(24).fill(0);")
-        w("  var dowArr=Array(7).fill(0),dowCnt=Array(7).fill(0);")
+        w("  var hourGmv=Array(24).fill(0),hourUnits=Array(24).fill(0),hourCnt=Array(24).fill(0);")
+        w("  var dowGmv=Array(7).fill(0),dowUnits=Array(7).fill(0),dowCnt=Array(7).fill(0);")
         w("  var hmArr=Array(7).fill(null).map(function(){return Array(24).fill(0);});")
         w("  for(var d=f;d<=t;d++){")
         w("    var dh=DAILY_HOUR[String(d)]||{};")
-        w("    var dayTot=0;")
-        w("    Object.keys(dh).forEach(function(h){var hh=parseInt(h),v=dh[h]||0;hourArr[hh]+=v;hourCnt[hh]++;dayTot+=v;});")
+        w("    var dayGmv=0,dayUnits=0;")
+        w("    Object.keys(dh).forEach(function(h){")
+        w("      var hh=parseInt(h),hv=dh[h]||{},gmv=hv.gmv||0,units=hv.units||0;")
+        w("      hourGmv[hh]+=gmv;hourUnits[hh]+=units;hourCnt[hh]++;")
+        w("      dayGmv+=gmv;dayUnits+=units;")
+        w("    });")
         w("    var dow=DAY_TO_DOW[String(d)];")
-        w("    if(dow!==undefined){dowArr[dow]+=dayTot;dowCnt[dow]++;}") 
-        w("    Object.keys(dh).forEach(function(h){if(dow!==undefined)hmArr[dow][parseInt(h)]+=(dh[h]||0);});")
+        w("    if(dow!==undefined){dowGmv[dow]+=dayGmv;dowUnits[dow]+=dayUnits;dowCnt[dow]++;}")
+        w("    Object.keys(dh).forEach(function(h){if(dow!==undefined)hmArr[dow][parseInt(h)]+=((dh[h]||{}).gmv||0);});")
         w("  }")
-        w("  hourArr=hourArr.map(function(v,i){return hourCnt[i]?Math.round(v/hourCnt[i]):0;});")
-        w("  dowArr=dowArr.map(function(v,i){return dowCnt[i]?Math.round(v/dowCnt[i]):0;});")
-        w("  var l24=Array.from({length:24},function(_,i){return String(i).padStart(2,\"00\")+\":00\";});")
-        w("  mkChart(\"c-hour\",{type:\"bar\",")
-        w("    data:{labels:l24,datasets:[{label:\"GMV prom/hora\",data:hourArr,backgroundColor:c.blue+\"cc\",borderRadius:4}]},")
-        w("    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:c.ctxt}}},scales:bAxes()}")
+        w("  hourGmv=hourGmv.map(function(v,i){return hourCnt[i]?Math.round(v/hourCnt[i]):0;});")
+        w("  hourUnits=hourUnits.map(function(v,i){return hourCnt[i]?parseFloat((v/hourCnt[i]).toFixed(1)):0;});")
+        w("  dowGmv=dowGmv.map(function(v,i){return dowCnt[i]?Math.round(v/dowCnt[i]):0;});")
+        w("  dowUnits=dowUnits.map(function(v,i){return dowCnt[i]?parseFloat((v/dowCnt[i]).toFixed(1)):0;});")
+        w("  var l24=Array.from({length:24},function(_,i){return String(i).padStart(2,'00')+':00';});")
+        w("  mkChart('c-hour',{type:'bar',")
+        w("    data:{labels:l24,datasets:[")
+        w("      {label:'GMV prom/hora',data:hourGmv,backgroundColor:c.blue+'cc',borderRadius:4,yAxisID:'y'},")
+        w("      {label:'Unidades prom/hora',data:hourUnits,type:'line',borderColor:c.yellow,backgroundColor:c.yellow+'33',")
+        w("       pointRadius:3,pointBackgroundColor:c.yellow,tension:0.35,yAxisID:'y2'}")
+        w("    ]},")
+        w("    options:{responsive:true,maintainAspectRatio:false,")
+        w("      plugins:{legend:{labels:{color:c.ctxt,font:{size:11}}}},")
+        w("      scales:{")
+        w("        x:{grid:{color:c.grid},ticks:{color:c.ctxt,font:{size:11}}},")
+        w("        y:{grid:{color:c.grid},ticks:{color:c.ctxt,font:{size:11},callback:function(v){return fmtM(v);}},")
+        w("           title:{display:true,text:'GMV',color:c.ctxt}},")
+        w("        y2:{position:'right',grid:{display:false},")
+        w("            ticks:{color:c.yellow,font:{size:11}},")
+        w("            title:{display:true,text:'Unidades',color:c.yellow}}")
+        w("      }")
+        w("    }")
         w("  });")
-        w("  var DOW=[\"Lun\",\"Mar\",\"Mie\",\"Jue\",\"Vie\",\"Sab\",\"Dom\"];")
-        w("  mkChart(\"c-dow\",{type:\"bar\",")
-        w("    data:{labels:DOW,datasets:[{label:\"GMV prom/dia\",data:dowArr,")
-        w("      backgroundColor:DOW.map(function(_,i){return(i>=5?c.cyan:c.blue)+\"cc\";}),borderRadius:6}]},")
-        w("    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:c.ctxt}}},scales:bAxes()}")
+        w("  var DOW=['Lun','Mar','Mie','Jue','Vie','Sab','Dom'];")
+        w("  mkChart('c-dow',{type:'bar',")
+        w("    data:{labels:DOW,datasets:[")
+        w("      {label:'GMV prom/dia',data:dowGmv,")
+        w("       backgroundColor:DOW.map(function(_,i){return(i>=5?c.cyan:c.blue)+'cc';}),borderRadius:6,yAxisID:'y'},")
+        w("      {label:'Unidades prom/dia',data:dowUnits,type:'line',borderColor:c.yellow,backgroundColor:c.yellow+'33',")
+        w("       pointRadius:5,pointBackgroundColor:c.yellow,tension:0.2,yAxisID:'y2'}")
+        w("    ]},")
+        w("    options:{responsive:true,maintainAspectRatio:false,")
+        w("      plugins:{legend:{labels:{color:c.ctxt,font:{size:11}}}},")
+        w("      scales:{")
+        w("        x:{grid:{color:c.grid},ticks:{color:c.ctxt,font:{size:11}}},")
+        w("        y:{grid:{color:c.grid},ticks:{color:c.ctxt,font:{size:11},callback:function(v){return fmtM(v);}},")
+        w("           title:{display:true,text:'GMV',color:c.ctxt}},")
+        w("        y2:{position:'right',grid:{display:false},")
+        w("            ticks:{color:c.yellow,font:{size:11}},")
+        w("            title:{display:true,text:'Unidades',color:c.yellow}}")
+        w("      }")
+        w("    }")
         w("  });")
         w("  renderHeatmap(hmArr);")
-        w("  var ins=document.getElementById(\"hora-insights\");")
-        w("  if(ins&&hourArr.some(function(v){return v>0;})){")
-        w("    var mxH=hourArr.indexOf(Math.max.apply(null,hourArr));")
-        w("    var valH=hourArr.filter(function(v){return v>0;});")
-        w("    var mnH=valH.length?hourArr.indexOf(Math.min.apply(null,valH)):0;")
-        w("    var mxD=dowArr.indexOf(Math.max.apply(null,dowArr));")
-        w("    ins.innerHTML=\"<div>Hora pico: <b>\"+String(mxH).padStart(2,\"0\")+\":00</b> &mdash; \"+fmtM(hourArr[mxH])+\"/hora prom.</div>\"")
-        w("      +\"<div>Hora valle: <b>\"+String(mnH).padStart(2,\"0\")+\":00</b> &mdash; \"+fmtM(hourArr[mnH]||0)+\"/hora</div>\"")
-        w("      +\"<div>Mejor dia: <b>\"+(DOW[mxD]||\"?\")+\"</b> &mdash; \"+fmtM(dowArr[mxD]||0)+\"/dia prom.</div>\"")
-        w("      +\"<div>Tip: Concentra Ads entre \"+String(Math.max(0,mxH-1)).padStart(2,\"0\")+\":00-\"+String(Math.min(23,mxH+2)).padStart(2,\"0\")+\":00 los <b>\"+(DOW[mxD]||\"?\")+\"</b>.</div>\";")
+        w("  var ins=document.getElementById('hora-insights');")
+        w("  if(ins&&hourGmv.some(function(v){return v>0;})){")
+        w("    var mxH=hourGmv.indexOf(Math.max.apply(null,hourGmv));")
+        w("    var valH=hourGmv.filter(function(v){return v>0;});")
+        w("    var mnH=valH.length?hourGmv.indexOf(Math.min.apply(null,valH)):0;")
+        w("    var mxD=dowGmv.indexOf(Math.max.apply(null,dowGmv));")
+        w("    var mxU=hourUnits.indexOf(Math.max.apply(null,hourUnits));")
+        w("    ins.innerHTML=")
+        w("      '<div>⚡ Hora pico GMV: <b>'+String(mxH).padStart(2,'0')+':00</b> &mdash; '+fmtM(hourGmv[mxH])+'/hora prom. | <b>'+hourUnits[mxH]+'</b> uds</div>'")
+        w("      +'<div>🔴 Hora valle: <b>'+String(mnH).padStart(2,'0')+':00</b> &mdash; '+fmtM(hourGmv[mnH]||0)+'/hora</div>'")
+        w("      +'<div>📅 Mejor d\xeda: <b>'+(DOW[mxD]||'?')+'</b> &mdash; '+fmtM(dowGmv[mxD]||0)+'/d\xeda prom. | <b>'+(dowUnits[mxD]||0).toFixed(1)+'</b> uds</div>'")
+        w("      +'<div>🎯 Tip: Concentr\xe1 Ads entre '+String(Math.max(0,mxH-1)).padStart(2,'0')+':00–'+String(Math.min(23,mxH+2)).padStart(2,'0')+':00 los <b>'+(DOW[mxD]||'?')+'</b>.</div>';")
         w("  }")
         w("}")
         w("function renderHeatmap(hmData){")
-        w("  var wrap=document.getElementById(\"heatmap-wrap\");if(!wrap||!HEATMAP||!HEATMAP.length)return;")
-        w("  var DOW=[\"Lun\",\"Mar\",\"Mie\",\"Jue\",\"Vie\",\"Sab\",\"Dom\"];")
-        w("  var flat=HEATMAP.reduce(function(a,r){return a.concat(r.filter(function(v){return v>0;}));;},[]);")
+        w("  var hm=hmData||(typeof HEATMAP!=='undefined'?HEATMAP:null);")
+        w("  var wrap=document.getElementById('heatmap-wrap');if(!wrap||!hm||!hm.length)return;")
+        w("  var DOW=['Lun','Mar','Mie','Jue','Vie','Sab','Dom'];")
+        w("  var flat=hm.reduce(function(a,r){return a.concat(r.filter(function(v){return v>0;}));;},[]);")
         w("  var maxV=flat.length?Math.max.apply(null,flat):1;")
         w("  var html='<table class=\"heatmap-tbl\"><thead><tr><th></th>';")
-        w("  for(var h=0;h<24;h++)html+=\"<th>\"+String(h).padStart(2,\"0\")+\"</th>\";")
-        w("  html+=\"</tr></thead><tbody>\";")
+        w("  for(var h=0;h<24;h++)html+='<th>'+String(h).padStart(2,'0')+'</th>';")
+        w("  html+='</tr></thead><tbody>';")
         w("  hm.forEach(function(row,di){")
-        w("    html+=\"<tr><td class=\\\"heatmap-lbl\\\">\"+(DOW[di]||di)+\"</td>\";")
+        w("    html+='<tr><td class=\"heatmap-lbl\">'+(DOW[di]||di)+'</td>';")
         w("    (row||[]).forEach(function(v){")
         w("      var p=v>0?v/maxV:0;")
-        w("      var bg=v>0?\"rgba(52,131,250,\"+(p*0.8+0.12).toFixed(2)+\")\":\"transparent\";")
-        w("      var tc=p>0.5?\"#ffffff\":\"var(--text3)\";")
-        w("      html+='<td class=\"hm-cell\" style=\"background:'+bg+\";color:\"+tc+'\" title=\"'+fmtM(v)+'\">'+(v>0?fmtM(v).replace(\"$\",\"\"):\"\")+\"</td>\";")
+        w("      var bg=v>0?'rgba(52,131,250,'+(p*0.8+0.12).toFixed(2)+')':'transparent';")
+        w("      var tc=p>0.5?'#ffffff':'var(--text3)';")
+        w("      html+='<td class=\"hm-cell\" style=\"background:'+bg+';color:'+tc+'\" title=\"'+fmtM(v)+'\">'+(v>0?fmtM(v).replace('$',''):'')+'</td>';")
         w("    });")
-        w("    html+=\"</tr>\";")
+        w("    html+='</tr>';")
         w("  });")
-        w("  html+=\"</tbody></table>\";")
+        w("  html+='</tbody></table>';")
         w("  wrap.innerHTML=html;")
         w("}")
         w("")
@@ -1468,20 +1491,24 @@ tr:hover td{background:var(--surface2)}
         w("  for(var d=f;d<=t;d++){var ds=DAILY_SKU[String(d)]||{};Object.keys(ds).forEach(function(sk){if(!filtSku[sk])filtSku[sk]={gmv:0,units:0};filtSku[sk].gmv+=ds[sk].gmv||0;filtSku[sk].units+=ds[sk].units||0;});}")
         w("  var catF=(document.getElementById(\"stk-cat-filter\")?document.getElementById(\"stk-cat-filter\").value:\"\").toLowerCase();")
         w("  var showF=document.getElementById(\"stk-show-filter\")?document.getElementById(\"stk-show-filter\").value:\"all\";")
+        w("  var days=t-f+1;")
         w("  var data=ML_ITEMS_DATA.filter(function(r){")
         w("    if(catF&&!(r.categoria||\"\").toLowerCase().includes(catF))return false;")
-        w("    var st=r.stock_total||0,vs=r.vta_semana||0;")
-        w("    var cov=vs>0?st/(vs/7):9999;")
-        w("    if(showF===\"zero\")return st===0;")
-        w("    if(showF===\"low\")return st<10;")
-        w("    if(showF===\"critical\")return cov<7;")
+        w("    var stk=(r.stock_full||0)+(r.stock_dep||0);")
+        w("    var sk=r.codigo||r.sku||'';")
+        w("    var periodUnits=filtSku[sk]?filtSku[sk].units:0;")
+        w("    var dailyRate=periodUnits>0?periodUnits/days:(r.vta_semana||0)/7;")
+        w("    var cov=dailyRate>0?stk/dailyRate:9999;")
+        w("    if(showF==='zero')return stk===0;")
+        w("    if(showF==='low')return stk<10;")
+        w("    if(showF==='critical')return cov<7;")
         w("    return true;")
-        w("  }).slice().sort(function(a,b){var fa=filtSku[a.codigo||a.sku||""],fb=filtSku[b.codigo||b.sku||""];return(fb?fb.gmv:b.gmv_period||0)-(fa?fa.gmv:a.gmv_period||0);});")
+        w("  }).slice().sort(function(a,b){var fa=filtSku[a.codigo||a.sku||''],fb=filtSku[b.codigo||b.sku||''];return(fb?fb.gmv:b.gmv_period||0)-(fa?fa.gmv:a.gmv_period||0);});")
         w("  var sm=document.getElementById(\"stock-summary\");")
         w("  if(sm){")
         w("    var tot=data.length;")
-        w("    var zero=data.filter(function(r){return(r.stock_total||0)===0;}).length;")
-        w("    var crit=data.filter(function(r){var v=r.vta_semana||0,s=r.stock_total||0;return s>0&&v>0&&(s/(v/7))<7;}).length;")
+        w("    var zero=data.filter(function(r){return((r.stock_full||0)+(r.stock_dep||0))===0;}).length;")
+        w("    var crit=data.filter(function(r){var s=(r.stock_full||0)+(r.stock_dep||0);var sk=r.codigo||r.sku||'';var pu=filtSku[sk]?filtSku[sk].units:0;var dr=pu>0?pu/days:(r.vta_semana||0)/7;return s>0&&dr>0&&(s/dr)<7;}).length;")
         w("    var full=data.reduce(function(s,r){return s+(r.stock_full||0);},0);")
         w("    sm.innerHTML=[")
         w("      {lbl:\"SKUs analizados\",val:tot,col:\"var(--text)\"},")
@@ -1492,17 +1519,19 @@ tr:hover td{background:var(--surface2)}
         w("  }")
         w("  var tb=document.getElementById(\"stock-tbody\");if(!tb)return;")
         w("  tb.innerHTML=data.map(function(r){")
-        w("    var vs=r.vta_semana||0,st=r.stock_total||0;")
-        w("    var covD=vs>0?(st/(vs/7)).toFixed(0):\"inf\";")
+        w("    var stk=(r.stock_full||0)+(r.stock_dep||0);")
+        w("    var sk=r.codigo||r.sku||'';")
+        w("    var pu=filtSku[sk]?filtSku[sk].units:0;")
+        w("    var dr=pu>0?pu/days:(r.vta_semana||0)/7;")
+        w("    var covD=dr>0?(stk/dr).toFixed(0):'inf';")
         w("    var covN=parseFloat(covD);")
         w("    var covC=isNaN(covN)?\"var(--text3)\":covN<7?\"var(--red)\":covN<15?\"var(--yellow)\":\"var(--green)\";")
         w("    return\"<tr>\"")
         w("      +'<td style=\"font-weight:700;color:var(--cyan);font-size:12px\">'+(r.codigo||r.sku||\"&mdash;\")+\"</td>\"")
         w("      +'<td style=\"font-size:11px;color:var(--text2)\">'+(r.descripcion||r.title||\"\").slice(0,42)+\"</td>\"")
         w("      +'<td style=\"font-size:11px;color:var(--text3)\">'+(r.categoria||\"\")+\"</td>\"")
-        w("      +\"<td>\"+(filtSku[r.codigo||r.sku||""]?(filtSku[r.codigo||r.sku||""].units):(r.units_period||0))+\"</td>\"")
-        w("      +'<td style=\"color:var(--blue)\">'+fmtM(filtSku[r.codigo||r.sku||""]?(filtSku[r.codigo||r.sku||""].gmv):(r.gmv_period||0))+\"</td>\"")
-        w("      +'<td style=\"font-weight:700;color:'+(st===0?\"var(--red)\":\"var(--text)\")+'\">'+fmtN(st)+\"</td>\"")
+        w("      +\"<td>\"+(filtSku[r.codigo||r.sku||'']?(filtSku[r.codigo||r.sku||''].units):(r.units_period||0))+\"</td>\"")
+        w("      +'<td style=\"color:var(--blue)\">'+fmtM(filtSku[r.codigo||r.sku||'']?(filtSku[r.codigo||r.sku||''].gmv):(r.gmv_period||0))+\"</td>\"")
         w("      +'<td style=\"color:'+covC+';font-weight:700\">'+(covD===\"inf\"?\"&infin;\":covD+\"d\")+\"</td>\"")
         w("      +'<td style=\"color:var(--text3)\">'+fmtN(r.stock_dep||0)+\"</td>\"")
         w("      +'<td style=\"color:var(--cyan)\">'+fmtN(r.stock_full||0)+\"</td>\"")
@@ -1554,6 +1583,45 @@ tr:hover td{background:var(--surface2)}
         w("        y:{grid:{color:c.grid},ticks:{color:c.ctxt,font:{size:10}}},")
         w("      }}")
         w("  });")
+        w("  renderCancelSku(f,t);")
+        w("}")
+
+        w("")
+        w("function renderCancelSku(dayFrom,dayTo){")
+        w("  var f=dayFrom||1,t=dayTo||MAX_DAY;")
+        w("  var skuData={};")
+        w("  for(var d=f;d<=t;d++){")
+        w("    var dd=DAILY_SKU_CANC[String(d)]||{};")
+        w("    Object.keys(dd).forEach(function(sk){")
+        w("      if(!skuData[sk])skuData[sk]={c:0,p:0};")
+        w("      skuData[sk].c+=dd[sk].c||0;")
+        w("      skuData[sk].p+=dd[sk].p||0;")
+        w("    });")
+        w("  }")
+        w("  var arr=Object.keys(skuData).map(function(sk){")
+        w("    var d=skuData[sk];")
+        w("    var tot=d.c+d.p;")
+        w("    var rate=tot>0?d.c/tot*100:0;")
+        w("    var meta=SKU_CANC_META[sk]||{t:sk,c:''};")
+        w("    return{sku:sk,cat:meta.c,c:d.c,p:d.p,rate:rate};")
+        w("  }).filter(function(x){return x.c>0;});")
+        w("  arr.sort(function(a,b){return b.c-a.c||b.rate-a.rate;});")
+        w("  var tb=document.getElementById('canc-sku-tbody');")
+        w("  if(!tb)return;")
+        w("  if(!arr.length){tb.innerHTML='<tr><td colspan=\"7\" style=\"color:var(--text3);text-align:center;padding:16px\">Sin cancelaciones en el per\u00edodo</td></tr>';return;}")
+        w("  tb.innerHTML=arr.slice(0,25).map(function(x,i){")
+        w("    var col=x.rate>10?'bad':(x.rate>5?'neutral':'good');")
+        w("    var riesgo=x.rate>10?'🔴 Alto':(x.rate>5?'🟡 Medio':'🟢 OK');")
+        w("    return '<tr>'")
+        w("      +'<td style=\"color:var(--text3)\">'+(i+1)+'</td>'")
+        w("      +'<td style=\"font-weight:700;color:var(--cyan);font-size:12px\">'+ x.id+'</td>'")
+        w("      +'<td style=\"color:var(--text2);font-size:11px\">'+ x.cat+'</td>'")
+        w("      +'<td style=\"color:var(--red);font-weight:700\">'+ fmtN(x.c)+'</td>'")
+        w("      +'<td>'+fmtN(x.p)+'</td>'")
+        w("      +'<td class=\"'+ col+'\">'+ x.rate.toFixed(1)+'%</td>'")
+        w("      +'<td>'+riesgo+'</td>'")
+        w("      +'</tr>';")
+        w("  }).join('');")
         w("}")
 
         w("")
@@ -1563,10 +1631,10 @@ tr:hover td{background:var(--surface2)}
         w("  for(var d=f;d<=t;d++){var ds=DAILY_SKU[String(d)]||{};Object.keys(ds).forEach(function(sk){if(!filtSku[sk])filtSku[sk]={gmv:0,units:0};filtSku[sk].gmv+=ds[sk].gmv||0;filtSku[sk].units+=ds[sk].units||0;});}")
         w("  var sort=document.getElementById(\"top-sort\")?document.getElementById(\"top-sort\").value:\"gmv\";")
         w("  var catF=(document.getElementById(\"top-cat-filter\")?document.getElementById(\"top-cat-filter\").value:\"\").toLowerCase();")
-        w("  var items=[];  // set below by allItems.filter")
-        w("  items=allItems.filter(function(x){return!catF||(x.categoria||\"\").toLowerCase().includes(catF);});items=items.slice().sort(function(a,b){return(b[sort]||0)-(a[sort]||0);});")
+        w("  var allItems=TOP_ITEMS.map(function(x){var fs=filtSku[x.id];return Object.assign({},x,{gmv:fs?fs.gmv:0,units:fs?fs.units:0});});")
         w("  var totG=allItems.reduce(function(s,x){return s+(x.gmv||0);},0)||1;")
         w("  var totU=allItems.reduce(function(s,x){return s+(x.units||0);},0)||1;")
+        w("  var items=allItems.filter(function(x){return!catF||(x.categoria||\"\").toLowerCase().includes(catF);}).slice().sort(function(a,b){return(b[sort]||0)-(a[sort]||0);});")
         w("  var kpis=document.getElementById(\"top-kpis\");")
         w("  if(kpis){")
         w("    var mC=items.filter(function(x){return x.method===\"master\";}).length;")
@@ -1579,12 +1647,9 @@ tr:hover td{background:var(--surface2)}
         w("      {lbl:\"Sin mapear\",val:uC,col:\"var(--red)\"},")
         w("    ].map(function(k){return'<div class=\"kpi\"><div class=\"kpi-label\">'+k.lbl+'</div><div class=\"kpi-val\" style=\"color:'+k.col+'\">'+k.val+\"</div></div>\";}).join(\"\");")
         w("  }")
-        w("  var allItems=TOP_ITEMS.map(function(x){var fs=filtSku[x.sku]||{};return Object.assign({},x,{gmv:fs.gmv||x.gmv,units:fs.units||x.units});});")
-        w("  var totG=allItems.reduce(function(s,x){return s+(x.gmv||0);},0)||1;")
-        w("  var totU=allItems.reduce(function(s,x){return s+(x.units||0);},0)||1;")
         w("  var tb=document.getElementById(\"top-tbody\");if(!tb)return;")
         w("  tb.innerHTML=items.slice(0,50).map(function(x,i){")
-        w("    var pri=TOP_ITEMS_PRI[x.sku]||{};")
+        w("    var pri=TOP_ITEMS_PRI[x.id]||{};")
         w("    var dpG=dPct(x.gmv,pri.gmv);var dpU=dPct(x.units,pri.units);")
         w("    var gSh=(x.gmv/totG*100).toFixed(1);")
         w("    var uSh=(x.units/totU*100).toFixed(1);")
@@ -1594,7 +1659,7 @@ tr:hover td{background:var(--surface2)}
         w("      +'<td style=\"color:var(--text3)\">'+(i+1)+\"</td>\"")
         w("      +\"<td>\"")
         w("        +'<span style=\"color:'+mCol+';font-size:10px;font-weight:700;border:1px solid '+mCol+';border-radius:3px;padding:1px 3px\">'+mIco+\"</span> \"")
-        w("        +'<span style=\"font-weight:700;color:var(--cyan);font-size:12px\">'+(x.sku||\"\")+\"</span><br>\"")
+        w("        +'<span style=\"font-weight:700;color:var(--cyan);font-size:12px\">'+(x.id||\"\")+\"</span><br>\"")
         w("        +'<span style=\"color:var(--text2);font-size:10px\">'+(x.title||\"\").slice(0,40)+\"</span>\"")
         w("      +\"</td>\"")
         w("      +'<td style=\"font-size:11px;color:var(--text3)\">'+(x.categoria||\"\")+\"</td>\"")
@@ -1608,15 +1673,114 @@ tr:hover td{background:var(--surface2)}
         w("  }).join(\"\");")
         w("}")
         w("")
+        w("function renderAds(dayFrom,dayTo){")
+        w("  var f=dayFrom||1,t=dayTo||MAX_DAY;")
+        w("  var c=cc();")
+        w("  function d2s(d){var m=String(ADS_MONTH).padStart(2,'0');return ADS_YEAR+'-'+m+'-'+String(d).padStart(2,'0');}")
+        w("  var cost=0,totAmt=0,dirAmt=0,indAmt=0,clicks=0,prints=0,totU=0;")
+        w("  var days=[],dCost=[],dRev=[],dRoas=[];")
+        w("  for(var d=f;d<=t;d++){")
+        w("    var v=ADS_DAILY[d2s(d)]||{};")
+        w("    var dc=v.cost||0, dr=v.total_amount||0;")
+        w("    cost+=dc; totAmt+=dr;")
+        w("    dirAmt+=v.direct_amount||0; indAmt+=v.indirect_amount||0;")
+        w("    clicks+=v.clicks||0; prints+=v.prints||0;")
+        w("    totU+=(v.direct_units_quantity||0)+(v.indirect_units_quantity||0);")
+        w("    days.push(d); dCost.push(Math.round(dc)); dRev.push(Math.round(dr));")
+        w("    dRoas.push(dc>0?Math.round(dr/dc*100)/100:0);")
+        w("  }")
+        w("  var roas=cost>0?totAmt/cost:0;")
+        w("  var ctr=prints>0?clicks/prints*100:0;")
+        w("  var cpc=clicks>0?cost/clicks:0;")
+        w("  // TACOS = costo / GMV total período; ACOS = costo / ingresos ads")
+        w("  var gmvTotP=0,unitsTotP=0;")
+        w("  for(var dd=f;dd<=t;dd++){var dv=DAILY_CUR[String(dd)]||{};gmvTotP+=dv.gmv||0;unitsTotP+=dv.units||0;}")
+        w("  var acos=totAmt>0?cost/totAmt*100:0;")
+        w("  var tacos=gmvTotP>0?cost/gmvTotP*100:0;")
+        w("  var pctIngGmv=gmvTotP>0?totAmt/gmvTotP*100:0;")
+        w("  var pctVentas=unitsTotP>0?totU/unitsTotP*100:0;")
+        w("  // Actualizar meta")
+        w("  var meta=document.getElementById('ads-meta');")
+        w("  if(meta)meta.textContent='D\u00edas '+f+'\u2013'+t+' \u00b7 Datos v\u00eda API Product Ads';")
+        w("  // KPIs fila única")
+        w("  var kg=document.getElementById('ads-kpis');")
+        w("  if(kg){")
+        w("    kg.style.cssText='display:grid;grid-template-columns:repeat(11,1fr);gap:8px;';")
+        w("    var kpis=[")
+        w("      {lbl:'Inversi\u00f3n',val:fmtM(cost),col:'var(--purple)'},")
+        w("      {lbl:'Ingresos Ads',val:fmtM(totAmt),sub:pctIngGmv.toFixed(1)+'% del GMV',col:'var(--green)'},")
+        w("      {lbl:'ROAS',val:roas.toFixed(2)+'x',col:roas>=10?'var(--green)':'var(--yellow)'},")
+        w("      {lbl:'ACOS',val:acos.toFixed(1)+'%',sub:'Inv/Ing Ads',col:acos<10?'var(--green)':'var(--yellow)'},")
+        w("      {lbl:'TACOS',val:tacos.toFixed(1)+'%',sub:'Inv/GMV total',col:tacos<10?'var(--green)':'var(--yellow)'},")
+        w("      {lbl:'CTR',val:ctr.toFixed(2)+'%',col:'var(--blue)'},")
+        w("      {lbl:'CPC',val:fmtM(cpc),col:'var(--cyan)'},")
+        w("      {lbl:'Clics',val:fmtN(clicks),col:'var(--text)'},")
+        w("      {lbl:'Impresiones',val:fmtN(prints),col:'var(--text3)'},")
+        w("      {lbl:'Ventas Ads',val:fmtN(totU),sub:pctVentas.toFixed(1)+'% del total',col:'var(--green)'},")
+        w("      {lbl:'Dir. / Ind.',val:fmtM(dirAmt)+' / '+fmtM(indAmt),col:'var(--text2)'},")
+        w("    ];")
+        w("    kg.innerHTML=kpis.map(function(k){")
+        w("      var sub=k.sub?'<div class=\"kpi-pri\">'+k.sub+'</div>':'';")
+        w("      return '<div class=\"kpi\" ><div class=\"kpi-label\">'+k.lbl+'</div><div class=\"kpi-val\" style=\"color:'+k.col+'\">'+k.val+'</div>'+sub+'</div>';")
+        w("    }).join('');")
+        w("  }")
+        w("  // Gráfico inversión vs ingresos")
+        w("  mkChart('c-ads-daily',{type:'bar',data:{labels:days,datasets:[")
+        w("    {label:'Inversión',data:dCost,yAxisID:'y',backgroundColor:c.purple+'99',borderRadius:4,order:2},")
+        w("    {label:'Ingresos',data:dRev,yAxisID:'y2',type:'line',borderColor:c.green,")
+        w("     backgroundColor:'transparent',borderWidth:2,pointRadius:3,pointBackgroundColor:c.green,order:1},")
+        w("  ]},options:{responsive:true,maintainAspectRatio:false,")
+        w("    plugins:{legend:{labels:{color:c.ctxt,font:{size:11}}}},")
+        w("    scales:{")
+        w("      x:{grid:{color:c.grid},ticks:{color:c.ctxt}},")
+        w("      y:{grid:{color:c.grid},ticks:{color:c.purple,callback:function(v){return fmtM(v);}},")
+        w("         title:{display:true,text:'Inversión',color:c.purple}},")
+        w("      y2:{position:'right',grid:{display:false},")
+        w("          ticks:{color:c.green,callback:function(v){return fmtM(v);}},")
+        w("          title:{display:true,text:'Ingresos',color:c.green}},")
+        w("    }}});")
+        w("  // Gráfico ROAS diario")
+        w("  mkChart('c-ads-roas',{type:'line',data:{labels:days,datasets:[")
+        w("    {label:'ROAS',data:dRoas,borderColor:c.yellow,backgroundColor:c.yellow+'22',")
+        w("     fill:true,borderWidth:2,pointRadius:3,tension:0.3},")
+        w("  ]},options:{responsive:true,maintainAspectRatio:false,")
+        w("    plugins:{legend:{labels:{color:c.ctxt,font:{size:11}}}},")
+        w("    scales:{")
+        w("      x:{grid:{color:c.grid},ticks:{color:c.ctxt}},")
+        w("      y:{grid:{color:c.grid},ticks:{color:c.yellow,callback:function(v){return v.toFixed(1)+'x';}},")
+        w("         title:{display:true,text:'ROAS',color:c.yellow}},")
+        w("    }}});")
+        w("  // Distribución costos")
+        w("  var cc2=document.getElementById('ads-costos');")
+        w("  if(cc2&&cost>0){")
+        w("    var gmvTot=0;for(var dd=f;dd<=t;dd++){var dv=DAILY_CUR[String(dd)]||{};gmvTot+=dv.gmv||0;}")
+        w("    var tacos2=gmvTot>0?cost/gmvTot*100:0;")
+        w("    var rows=[")
+        w("      {lbl:'Inversión Ads',val:cost,tot:gmvTot,col:'var(--purple)'},")
+        w("      {lbl:'Ingresos generados',val:totAmt,tot:gmvTot,col:'var(--green)'},")
+        w("      {lbl:'TACOS (Ads/GMV)',val:null,pct:tacos2,col:tacos2<10?'var(--green)':'var(--yellow)',txt:tacos2.toFixed(1)+'%'},")
+        w("    ];")
+        w("    cc2.innerHTML=rows.map(function(r){")
+        w("      var pct=r.pct!=null?r.pct:(r.tot>0?r.val/r.tot*100:0);")
+        w("      var txt=r.txt||fmtM(r.val)+' ('+pct.toFixed(1)+'%)';")
+        w("      return '<div class=\"pct-row\"><span class=\"pct-lbl\">'+r.lbl+'</span>'")
+        w("        +'<div class=\"pct-track\"><div class=\"pct-fill\" style=\"width:'+Math.min(100,Math.round(pct))+'%;background:'+r.col+'\"></div></div>'")
+        w("        +'<span class=\"pct-num\" style=\"color:'+r.col+'\">'+txt+'</span></div>';")
+        w("    }).join('');")
+        w("  }")
+        w("}")
+        w("")
         w("function renderAnual(){")
         w("  var c=cc();")
-        w("  var lbl=MONTHLY.map(function(m){return m.label||\"\";});")
-        w("  var gmvs=MONTHLY.map(function(m){return m.gmv||0;});")
-        w("  var tkts=MONTHLY.map(function(m){return m.avg_ticket||0;});")
+        w("  // Excluir Dic 25 del gráfico")
+        w("  var MON26=MONTHLY.filter(function(m){return !(m.year===2025&&m.month===12);});")
+        w("  var lbl=MON26.map(function(m){return m.label||\"\";})")
+        w("  var gmvs=MON26.map(function(m){return m.gmv||0;});")
+        w("  var tkts=MON26.map(function(m){return m.avg_ticket||0;});")
         w("  mkChart(\"c-anual\",{type:\"bar\",")
         w("    data:{labels:lbl,datasets:[")
         w("      {label:\"GMV mensual\",data:gmvs,yAxisID:\"y\",")
-        w("       backgroundColor:gmvs.map(function(_,i){return(MONTHLY[i]&&MONTHLY[i].complete?c.blue:c.cyan)+\"cc\";}),")
+        w("       backgroundColor:gmvs.map(function(_,i){return(MON26[i]&&MON26[i].complete?c.blue:c.cyan)+\"cc\";}),")
         w("       borderRadius:6,order:2},")
         w("      {label:\"Ticket prom.\",data:tkts,type:\"line\",yAxisID:\"y2\",")
         w("       borderColor:c.yellow,backgroundColor:\"transparent\",")
@@ -1633,6 +1797,36 @@ tr:hover td{background:var(--surface2)}
         w("            title:{display:true,text:\"Ticket\",color:c.yellow}},")
         w("      }}")
         w("  });")
+        w("}")
+        w("")
+        w("function renderReputacion(dayFrom,dayTo){")
+        w("  var f=dayFrom||1,t=dayTo||MAX_DAY;")
+        w("  var days=t-f+1;")
+        w("  var paid=0,canc=0,gmv=0,paidP=0,cancP=0,gmvP=0;")
+        w("  for(var d=f;d<=t;d++){")
+        w("    var dc=DAILY_CUR[String(d)]||{},dp=DAILY_PRI[String(d)]||{};")
+        w("    paid+=dc.paid||0;canc+=dc.canc||0;gmv+=dc.gmv||0;")
+        w("    paidP+=dp.paid||0;cancP+=dp.canc||0;gmvP+=dp.gmv||0;")
+        w("  }")
+        w("  var cr=(paid+canc)>0?canc/(paid+canc)*100:0;")
+        w("  var crP=(paidP+cancP)>0?cancP/(paidP+cancP)*100:0;")
+        w("  var tk=paid>0?gmv/paid:0;")
+        w("  var gmvLost=canc*tk;")
+        w("  var gmvLostP=cancP*(paidP>0?gmvP/paidP:0);")
+        w("  function colCr(v){return v>5?'var(--red)':v>2?'var(--yellow)':'var(--green)';}")
+        w("  function colCanc(v){return v>20?'var(--red)':v>5?'var(--yellow)':'var(--text)';}")
+        w("  var kg=document.getElementById('rep-period-kpis');")
+        w("  if(!kg)return;")
+        w("  var rows=[")
+        w("    {lbl:'Canceladas período',val:fmtN(canc),col:colCanc(canc),dp:dPct(canc,cancP),inv:true,pri:'Ant: '+fmtN(cancP)},")
+        w("    {lbl:'Pagadas período',val:fmtN(paid),col:'var(--green)',dp:dPct(paid,paidP),pri:'Ant: '+fmtN(paidP)},")
+        w("    {lbl:'Tasa cancelación',val:cr.toFixed(2)+'%',col:colCr(cr),dp:dPct(cr,crP),inv:true,pri:'Ant: '+crP.toFixed(2)+'%'},")
+        w("    {lbl:'GMV perdido est.',val:fmtM(gmvLost),col:'var(--red)',dp:dPct(gmvLost,gmvLostP),inv:true,pri:'Ant: '+fmtM(gmvLostP)},")
+        w("  ];")
+        w("  kg.innerHTML=rows.map(function(k){")
+        w("    var da=k.dp!=null?'<div class=\"kpi-delta\">'+arrH(k.dp,k.inv||false)+'</div>':'';")
+        w("    return'<div class=\"kpi\"><div class=\"kpi-label\">'+k.lbl+'</div><div class=\"kpi-val\" style=\"color:'+k.col+'\">'+k.val+'</div>'+da+'<div class=\"kpi-pri\">'+k.pri+'</div></div>';")
+        w("  }).join('');")
         w("}")
         w("")
         w("document.addEventListener(\"DOMContentLoaded\",function(){")
