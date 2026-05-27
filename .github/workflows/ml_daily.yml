@@ -1,0 +1,66 @@
+name: ML Dashboard Daily — SPOTCOMPRAS
+
+on:
+  schedule:
+    - cron: '0 9 * * *'   # 06:00 Argentina (UTC-3) = 09:00 UTC
+  workflow_dispatch:       # Permite correr manualmente desde GitHub
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependencias
+        run: pip install requests openpyxl --quiet
+
+      - name: Restaurar caché de datos
+        uses: actions/cache@v4
+        with:
+          path: ml_agent/data/
+          key: ml-data-${{ github.run_id }}
+          restore-keys: |
+            ml-data-
+
+      - name: Reconstruir configs desde secrets
+        run: python ml_agent/reconstruct_configs.py
+        env:
+          ML_CLIENT_ID: ${{ secrets.ML_CLIENT_ID }}
+          ML_CLIENT_SECRET: ${{ secrets.ML_CLIENT_SECRET }}
+          ML_REDIRECT_URI: ${{ secrets.ML_REDIRECT_URI }}
+          ML_REFRESH_TOKEN: ${{ secrets.ML_REFRESH_TOKEN }}
+          ML_USER_ID: ${{ secrets.ML_USER_ID }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          EMAIL_FROM_NAME: ${{ secrets.EMAIL_FROM_NAME }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          RAILWAY_URL: ${{ secrets.RAILWAY_URL }}
+          RAILWAY_UPDATE_KEY: ${{ secrets.RAILWAY_UPDATE_KEY }}
+
+      - name: Correr pipeline
+        run: |
+          cd ml_agent
+          python run_daily.py
+
+      - name: Actualizar ML_REFRESH_TOKEN en Secrets
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          NEW_TOKEN=$(python -c "import json; t=json.load(open('ml_agent/ml_tokens.json')); print(t.get('refresh_token',''))" 2>/dev/null || echo "")
+          if [ -n "$NEW_TOKEN" ]; then
+            gh secret set ML_REFRESH_TOKEN --body "$NEW_TOKEN" --repo ${{ github.repository }}
+            echo "Refresh token actualizado OK"
+          else
+            echo "WARN: no se pudo leer el nuevo refresh_token"
+          fi
