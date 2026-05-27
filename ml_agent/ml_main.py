@@ -1,11 +1,11 @@
 """
 ml_main.py — Orquestador principal del agente Mercado Libre
-Corre automáticamente: fetch datos (mes actual + mes anterior) → genera dashboard 360°
+Corre automaticamente: fetch datos (mes actual + mes anterior) -> genera dashboard 360
 
 Uso:
-  python ml_main.py              → pipeline completo
-  python ml_main.py --only-dash  → solo regenera el dashboard
-  python ml_main.py --check      → verifica conexión
+  python ml_main.py              -> pipeline completo
+  python ml_main.py --only-dash  -> solo regenera el dashboard
+  python ml_main.py --check      -> verifica conexion
 """
 import sys, os, json, calendar
 from datetime import datetime, date
@@ -29,7 +29,7 @@ def _load(name):
 
 
 def fetch_and_compute():
-    """Descarga órdenes mes actual + mes anterior, evolutivo 2026, computa métricas."""
+    """Descarga ordenes mes actual + mes anterior, evolutivo 2026, computa metricas."""
     sys.path.insert(0, SCRIPT_DIR)
     from ml_auth import MLSession
     from ml_data import (fetch_orders_range, fetch_items,
@@ -40,7 +40,6 @@ def fetch_and_compute():
     session = MLSession()
     today   = date.today()
 
-    # ── Períodos MoM ─────────────────────────────────────────────────────────
     cur_year, cur_month = today.year, today.month
     if cur_month == 1:
         pri_year, pri_month = cur_year - 1, 12
@@ -57,30 +56,26 @@ def fetch_and_compute():
         t = "23:59:59" if end else "00:00:00"
         return f"{d.strftime('%Y-%m-%d')}T{t}.000-00:00"
 
-    print(f"\n  Período actual:   {cur_from} → {cur_to}")
-    print(f"  Período anterior: {pri_from} → {pri_to}")
+    print(f"\n  Periodo actual:   {cur_from} -> {cur_to}")
+    print(f"  Periodo anterior: {pri_from} -> {pri_to}")
 
-    # ── Fetch órdenes ─────────────────────────────────────────────────────────
     cur_raw = fetch_orders_range(session, iso(cur_from), iso(cur_to, True), "Mes actual")
     pri_raw = fetch_orders_range(session, iso(pri_from), iso(pri_to, True), "Mes anterior")
 
     _save('orders_current', cur_raw)
     _save('orders_prior',   pri_raw)
 
-    # ── Métricas ──────────────────────────────────────────────────────────────
     mc = compute_metrics(cur_raw)
     mp = compute_metrics(pri_raw)
     _save('metrics_current', mc)
     _save('metrics_prior',   mp)
 
-    # ── Items y enriquecimiento ───────────────────────────────────────────────
     items = fetch_items(session)
     _save('items', items)
 
     ec = enrich_metrics(cur_raw, items)
     ep = enrich_metrics(pri_raw, items)
 
-    # Nombres de categorías
     all_cats = set(list(ec.get('by_category', {}).keys()) +
                    list(ep.get('by_category', {}).keys()))
     cat_names = fetch_category_names(session, list(all_cats)[:30])
@@ -91,25 +86,19 @@ def fetch_and_compute():
     _save('enrich_prior',   ep)
     _save('cat_names',      cat_names)
 
-    # Evolutivo 2026
     existing_monthly = _load('monthly_2026') or []
     fetch_monthly_evolution_2026(session, existing=existing_monthly)
 
-    # Stock externo (STATUS.xlsx)
     dash_dir = os.path.join(SCRIPT_DIR, 'dashboards')
     status_path = os.path.join(dash_dir, 'STATUS.xlsx')
     if os.path.exists(status_path):
         process_status_xlsx(status_path)
 
-    # Categorias por SKU
     cat_sku_path = os.path.join(dash_dir, 'Categoria y subcategoria por codigo.xlsx')
-    if not os.path.exists(cat_sku_path):
-        cat_sku_path = os.path.join(dash_dir, 'Categoría y subcategoría por código.xlsx')
     if os.path.exists(cat_sku_path):
         sku_cats = load_sku_categories(cat_sku_path)
         _save('sku_categories', sku_cats)
 
-    # Summary
     MONTH_ES = ["","Enero","Febrero","Marzo","Abril","Mayo","Junio",
                 "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]
     summary = {
@@ -127,12 +116,29 @@ def fetch_and_compute():
     print(f"\n  OK Datos listos:")
     print(f"     Mes actual:   {len(cur_raw)} ordenes | GMV ${mc.get('gmv',0):,.0f}")
     print(f"     Mes anterior: {len(pri_raw)} ordenes | GMV ${mp.get('gmv',0):,.0f}")
+
+    # ── Liquidaciones & Conciliación ────────────────────────────────────────
+    try:
+        from ml_liquidaciones import run as run_liquidaciones
+        print("\n  Actualizando Liquidaciones...")
+        run_liquidaciones(session=session)
+    except Exception as e:
+        print(f"\n  [liquidaciones] Error (no crítico): {e}")
+
+    # ── Balance MP (dinero en cuenta / a cobrar / retenido) ──────────────────
+    try:
+        from fetch_mp_balance import run as run_mp_balance
+        print("\n  Actualizando balance MP...")
+        run_mp_balance()
+    except Exception as e:
+        print(f"\n  [mp_balance] Error (no crítico): {e}")
+
     return summary
 
 
 def _push_dashboard_to_railway(dashboard_path):
     """
-    Envía el HTML generado directamente a Railway vía HTTP POST.
+    Envia el HTML generado directamente a Railway via HTTP POST.
     Sin git, sin credenciales de GitHub.
     Lee de ml_email_config.json:
         railway_url:        https://spotcompras.up.railway.app
@@ -149,7 +155,7 @@ def _push_dashboard_to_railway(dashboard_path):
     url = cfg.get('railway_url', '').rstrip('/')
     key = cfg.get('railway_update_key', '')
     if not url or not key:
-        print("  [railway] railway_url / railway_update_key no configurados — skip")
+        print("  [railway] railway_url / railway_update_key no configurados -- skip")
         return
 
     endpoint = f"{url}/update"
@@ -198,25 +204,36 @@ def main():
     from ml_dashboard import build_dashboard
     out = build_dashboard()
 
+    # Post-process: calendar picker + global hover effects
+    try:
+        import importlib.util, sys as _sys
+        _spec = importlib.util.spec_from_file_location(
+            "postprocess_dashboard",
+            os.path.join(SCRIPT_DIR, "postprocess_dashboard.py"))
+        _pp = importlib.util.module_from_spec(_spec)
+        _spec.loader.exec_module(_pp)
+        _pp.run()
+        print("  ✅ Post-procesado (calendar + hover) aplicado")
+    except Exception as _e:
+        print(f"  ⚠️  Post-procesado opcional falló: {_e}")
+
     print(f"\n  {'='*40}")
     print(f"  OK DASHBOARD ACTUALIZADO")
     print(f"  {out}")
     print(f"  {'='*40}\n")
 
-    # Email automatico
     email_cfg = os.path.join(SCRIPT_DIR, 'ml_email_config.json')
     if not no_email and os.path.exists(email_cfg):
         with open(email_cfg, encoding='utf-8') as f:
             ecfg = json.load(f)
         if ecfg.get('smtp_user', '').endswith('@gmail.com') and \
            not ecfg['smtp_user'].startswith('TU_CUENTA') and \
-           ecfg.get('smtp_password', '').replace('x','').replace(' ','') != '':
+           ecfg.get('smtp_password', '').replace('x', '').replace(' ', '') != '':
             from ml_email import run as send_report
             send_report()
         elif send_mail:
             print("  Configura ml_email_config.json con tus credenciales reales de Gmail.")
 
-    # Push directo a Railway (sin git)
     _push_dashboard_to_railway(out)
 
 
