@@ -20,9 +20,12 @@ os.makedirs(DATA_DIR, exist_ok=True)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _save_json(name: str, data):
+    """Guardado atómico: escribe a .tmp y renombra — evita truncación."""
     path = os.path.join(DATA_DIR, f"{name}.json")
-    with open(path, "w", encoding="utf-8") as f:
+    tmp_path = path + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+    os.replace(tmp_path, path)
     print(f"  💾 {name}.json guardado ({len(data) if isinstance(data, list) else 1} registros)")
     return path
 
@@ -97,22 +100,24 @@ def fetch_orders(session: MLSession, days_back: int = 30) -> list:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def fetch_items(session: MLSession) -> list:
-    """Trae todos los ítems activos del vendedor con datos de stock y logística."""
+    """Trae todos los ítems activos y pausados del vendedor con datos de stock y logística."""
     print("\n  🗂️  Fetching ítems del catálogo...")
 
-    # 1. Listar IDs de ítems activos
-    item_ids_raw = session.get_paginated(
-        f"/users/{session.user_id}/items/search",
-        params={"status": "active"},
-        limit=100
-    )
-    # La respuesta viene como lista de IDs (strings)
-    if item_ids_raw and isinstance(item_ids_raw[0], str):
-        item_ids = item_ids_raw
-    else:
-        item_ids = [i.get("id") for i in item_ids_raw if i.get("id")]
+    # 1. Listar IDs de ítems activos + pausados (pausados también venden)
+    all_ids = []
+    for status in ["active", "paused"]:
+        raw = session.get_paginated(
+            f"/users/{session.user_id}/items/search",
+            params={"status": status},
+            limit=100
+        )
+        if raw and isinstance(raw[0], str):
+            all_ids.extend(raw)
+        else:
+            all_ids.extend([i.get("id") for i in raw if i.get("id")])
+    item_ids = list(dict.fromkeys(all_ids))  # dedup preservando orden
 
-    print(f"  → {len(item_ids)} ítems activos encontrados")
+    print(f"  → {len(item_ids)} ítems encontrados (activos + pausados)")
 
     # 2. Traer detalles en batches de 20
     details = []
@@ -427,6 +432,10 @@ def fetch_orders_range(session, date_from: str, date_to: str, label: str = "") -
                 "currency_id":  o.get("currency_id"),
                 "buyer_id":     (o.get("buyer") or {}).get("id") if isinstance(o.get("buyer"), dict) else o.get("buyer_id"),
                 "shipping_id":  (o.get("shipping") or {}).get("id") if isinstance(o.get("shipping"), dict) else o.get("shipping_id"),
+                # Campos extra para órdenes canceladas (análisis postventa)
+                "cancel_detail": o.get("cancel_detail"),
+                "tags":          o.get("tags") or [],
+                "mediations":    o.get("mediations") or [],
                 "items": [
                     {
                         "item_id":    (i.get("item") or {}).get("id") if isinstance(i.get("item"), dict) else i.get("item_id"),
@@ -567,11 +576,12 @@ def compute_metrics(orders: list) -> dict:
     }
 
 
-def enrich_metrics(orders: list, items: list) -> dict:
+def enrich_metrics(orders: list, items: list, ship_map: dict = None) -> dict:
     """Enriquece métricas con dimensiones adicionales: categoría, tipo publicación, logística, hora."""
     from collections import defaultdict
     from datetime import datetime
 
+    ship_map  = ship_map or {}
     item_map = {i["item_id"]: i for i in items}
     paid = [o for o in orders if o.get("status") == "paid"]
 
@@ -584,6 +594,8 @@ def enrich_metrics(orders: list, items: list) -> dict:
     # Per-day breakdown for listing_type and logistic (enables range filtering in dashboard)
     daily_lt   = defaultdict(lambda: defaultdict(float))   # {day: {label: gmv}}
     daily_log  = defaultdict(lambda: defaultdict(float))   # {day: {label: gmv}}
+    daily_lt_u = defaultdict(lambda: defaultdict(int))     # {day: {label: units}}
+    daily_log_u= defaultdict(lambda: defaultdict(int))     # {day: {label: units}}
 
     for o in paid:
         ds = o.get("date_created", "") or ""
@@ -611,10 +623,19 @@ def enrich_metrics(orders: list, items: list) -> dict:
             lt_raw  = item_map.get(iid, {}).get("listing_type_id") or i.get("listing_type") or "unknown"
             lt      = {"gold_special": "Clásica", "gold_pro": "Premium",
                        "gold_premium": "Premium"}.get(lt_raw, "Sin clasificar" if lt_raw == "unknown" else lt_raw)
-            log_raw = item_map.get(iid, {}).get("logistic_type") or "unknown"
-            log     = {"fulfillment": "Full", "cross_docking": "Flex",
-                       "self_service": "Colecta", "default_buying_flow": "Colecta",
-                       "drop_off": "Colecta"}.get(log_raw, "Colecta" if log_raw == "unknown" else log_raw)
+            # Prioridad: ship_map (API /shipments) > shipping inline > item_map
+            _sid    = str(o.get("shipping_id", ""))
+            log_raw = (ship_map.get(_sid)
+                       or o.get("shipping", {}).get("logistic_type")
+                       or item_map.get(iid, {}).get("logistic_type")
+                       or "unknown")
+            log     = {"fulfillment": "Full",
+                       "self_service": "Flex",        # vendedor gestiona su propia logística
+                       "cross_docking": "Colecta",    # vendedor lleva a ML, ML entrega (ME)
+                       "default_buying_flow": "Colecta",
+                       "drop_off": "Colecta",
+                       "xd_drop_off": "Colecta"}.get(log_raw, None if log_raw == "unknown" else log_raw)
+            if log is None: continue  # sin logistic_type confirmado → excluir del breakdown
 
             by_cat[cat]["gmv"]   += gmv
             by_cat[cat]["units"] += units
@@ -624,14 +645,18 @@ def enrich_metrics(orders: list, items: list) -> dict:
             by_log[log]["units"] += units
             du[day]              += units
             if day:
-                daily_lt[day][lt]  += gmv
+                daily_lt[day][lt]   += gmv
                 daily_log[day][log] += gmv
+                daily_lt_u[day][lt]   += units
+                daily_log_u[day][log] += units
 
     # Serialize daily_lt and daily_log as {day_str: {label: gmv_int}}
     daily_lt_out  = {str(d): {lbl: round(v) for lbl, v in lmap.items()}
                      for d, lmap in sorted(daily_lt.items())}
     daily_log_out = {str(d): {lbl: round(v) for lbl, v in lmap.items()}
                      for d, lmap in sorted(daily_log.items())}
+    daily_lt_u_out  = {str(d): dict(lmap) for d, lmap in sorted(daily_lt_u.items())}
+    daily_log_u_out = {str(d): dict(lmap) for d, lmap in sorted(daily_log_u.items())}
 
     return {
         "by_category":     {k: {"gmv": round(v["gmv"]), "units": v["units"], "name": v["name"]}
@@ -645,6 +670,8 @@ def enrich_metrics(orders: list, items: list) -> dict:
         "daily_units":     {str(k): v for k, v in sorted(du.items())},
         "daily_lt":        daily_lt_out,
         "daily_log":       daily_log_out,
+        "daily_lt_u":      daily_lt_u_out,
+        "daily_log_u":     daily_log_u_out,
     }
 
 
@@ -874,3 +901,153 @@ def load_sku_categories(xlsx_path: str) -> dict:
     except Exception as e:
         print(f"  No se pudo cargar categorias SKU: {e}")
         return {}
+
+
+def compute_postventa(cur_raw: list, pri_raw: list = None) -> dict:
+    """
+    Genera postventa_current.json y cancelled_current.json desde órdenes crudas.
+    Requiere que fetch_orders_range capture cancel_detail, tags, mediations.
+    """
+    from collections import defaultdict
+    import json as _json
+    import os as _os
+
+    DATA_DIR = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), 'data')
+
+    paid_orders = [o for o in cur_raw if o.get("status") == "paid"]
+    canc_orders = [o for o in cur_raw if o.get("status") == "cancelled"]
+
+    # --- Guardar cancelled_current.json ---
+    _save_json("cancelled_current", canc_orders)
+
+    # Cancel reason codes → categorías
+    CODE_MAP = {
+        'buyer_cancel_express':    'pre_envio',
+        'pack_splitted':           'pack',
+        'mediations':              'med',
+        'shipment_not_delivered':  'log',
+        'fraud':                   'fraud',
+        'shipment_unfulfilled':    'log',
+        'not_paid':                'pre_envio',
+        'buyer_cancel_after_ship': 'pre_envio',
+    }
+    CODE_LABEL = {
+        'pre_envio': 'Comprador canceló antes de despacho',
+        'pack':      'División de pack (ML)',
+        'med':       'Mediación / Reclamo',
+        'log':       'No entregado por logística',
+        'fraud':     'Fraude detectado',
+        'other':     'Sin especificar',
+    }
+
+    total_paid  = len(paid_orders)
+    total_canc  = len(canc_orders)
+
+    # Count devolutions (returned) vs mediations per cancel_detail
+    dev_count  = 0
+    med_count  = 0
+    gmv_dev    = 0.0
+    gmv_med    = 0.0
+
+    daily = defaultdict(lambda: {'dev':0,'med':0,'pre':0,'log':0,'int':0,'gmv_dev':0,'gmv_med':0})
+    by_code_counts = defaultdict(int)
+
+    # Per-SKU tracking
+    sku_dev = defaultdict(lambda: {'id':'','title':'','dev':0,'med':0,'paid':0,'gmv_dev':0})
+    sku_med = defaultdict(lambda: {'id':'','title':'','dev':0,'med':0,'paid':0,'gmv_med':0})
+
+    for o in paid_orders:
+        ds = o.get("date_created","")
+        try:
+            day = int(ds[8:10])
+        except:
+            day = None
+        for i in o.get("items",[]):
+            iid = i.get("item_id","")
+            sku_dev[iid]['id']    = iid
+            sku_dev[iid]['title'] = sku_dev[iid].get('title','') or (i.get("title","") or iid)[:55]
+            sku_dev[iid]['paid'] += 1
+            sku_med[iid]['id']    = iid
+            sku_med[iid]['title'] = sku_med[iid].get('title','') or (i.get("title","") or iid)[:55]
+            sku_med[iid]['paid'] += 1
+
+    for o in canc_orders:
+        cd   = o.get("cancel_detail") or {}
+        code = cd.get("code","") or ""
+        meds = o.get("mediations") or []
+        tags = o.get("tags") or []
+        gmv  = o.get("total_amount",0) or 0
+
+        # Determine type
+        has_med = bool(meds) or "mediation" in " ".join(tags).lower() or code in ("mediations","fraud")
+        cat_key = CODE_MAP.get(code, 'other')
+
+        ds = o.get("date_created","")
+        try:
+            day = int(ds[8:10])
+        except:
+            day = 0
+
+        by_code_counts[CODE_LABEL.get(cat_key, 'Sin especificar')] += 1
+
+        if has_med:
+            med_count += 1
+            gmv_med   += gmv
+            daily[day]['med']     += 1
+            daily[day]['gmv_med'] += gmv
+            for i in o.get("items",[]):
+                iid = i.get("item_id","")
+                if iid:
+                    sku_med[iid]['id']    = iid
+                    sku_med[iid]['title'] = sku_med[iid].get('title','') or (i.get("title","") or iid)[:55]
+                    sku_med[iid]['med']   += 1
+                    sku_med[iid]['gmv_med'] += gmv
+        else:
+            dev_count += 1
+            gmv_dev   += gmv
+            daily[day]['dev']     += 1
+            daily[day]['gmv_dev'] += gmv
+            for i in o.get("items",[]):
+                iid = i.get("item_id","")
+                if iid:
+                    sku_dev[iid]['id']    = iid
+                    sku_dev[iid]['title'] = sku_dev[iid].get('title','') or (i.get("title","") or iid)[:55]
+                    sku_dev[iid]['dev']   += 1
+                    sku_dev[iid]['gmv_dev'] += gmv
+
+        # sub-categories
+        if cat_key == 'pre_envio': daily[day]['pre'] += 1
+        elif cat_key == 'log':     daily[day]['log'] += 1
+        elif cat_key == 'med':     daily[day]['int'] += 1
+
+    base = total_paid + total_canc
+    rate_dev = round(dev_count / base * 100, 2) if base else 0
+    rate_med = round(med_count / base * 100, 2) if base else 0
+
+    # Top 15 by dev / med
+    top_dev = sorted(
+        [dict(v) for v in sku_dev.values() if v['dev'] > 0],
+        key=lambda x: -x['dev']
+    )[:15]
+    top_med = sorted(
+        [dict(v) for v in sku_med.values() if v['med'] > 0],
+        key=lambda x: -x['med']
+    )[:15]
+
+    result = {
+        'paid':    total_paid,
+        'dev':     dev_count,
+        'med':     med_count,
+        'gmv_dev': round(gmv_dev),
+        'gmv_med': round(gmv_med),
+        'rate_dev': rate_dev,
+        'rate_med': rate_med,
+        'daily':   {str(k): {kk: round(vv) for kk,vv in v.items()} for k,v in sorted(daily.items()) if k > 0},
+        'by_code': dict(by_code_counts),
+        'top_dev': top_dev,
+        'top_med': top_med,
+    }
+
+    _save_json("postventa_current", result)
+    print(f"  ✅ postventa_current: paid={total_paid}, dev={dev_count}, med={med_count}, cancelled_saved={len(canc_orders)}")
+    return result
