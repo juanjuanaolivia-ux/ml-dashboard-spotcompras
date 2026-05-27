@@ -72,7 +72,7 @@ def refresh_access_token(tokens: dict, cfg: dict) -> dict:
         "client_id":     cfg["client_id"],
         "client_secret": cfg["client_secret"],
         "refresh_token": tokens["refresh_token"],
-    })
+    }, timeout=20)
     resp.raise_for_status()
     new_tokens = resp.json()
     new_tokens["expires_at"] = time.time() + new_tokens.get("expires_in", 21600)
@@ -195,6 +195,7 @@ class MLSession:
 
     def get(self, path: str, **kwargs) -> dict:
         url = f"{API_BASE}{path}"
+        kwargs.setdefault('timeout', 30)
         resp = self._session.get(url, **kwargs)
         resp.raise_for_status()
         return resp.json()
